@@ -6,19 +6,32 @@
 - Status: IMMUTABLE
 
 ## Current Phase
-- Phase: 5 - Storage Implementation
+- Phase: 6 - Query Language
 - Started: 2025-01-01
-- Last Update: 2025-01-05
-- Commits: 5
+- Last Update: 2025-01-08
+- Commits: 8
 - Status: In Progress
 
 ## Progress Log
+
+### 2025-01-08 - Query Lexer
+- Token types for pipeline query language
+- Lexer with peek/next token
+- Keywords and operators
+- Integer literals and identifiers
+- Comment support
+
+### 2025-01-07 - Segment Writer/Reader
+- SegmentWriter with columnar encoding
+- SegmentReader with mmap support
+- Compression with delta/bit-packing/RLE
+- CRC32C validation
+- Bloom filters for pruning
 
 ### 2025-01-05 - Storage Format Definition
 - Added VTS1 file format header/footer
 - Defined column descriptors and zone maps
 - Bloom filter parameters
-- Next: SegmentWriter/SegmentReader implementation
 
 ### 2025-01-04 - Codec Layer
 - VTP1 encoder/decoder
