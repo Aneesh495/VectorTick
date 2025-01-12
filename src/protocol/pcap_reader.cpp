@@ -56,7 +56,7 @@ Status PcapReader::parse_global_header() noexcept {
     }
     
     u16 version_major = is_big_endian_ ? read_be_u16(data + 4) : read_le_u16(data + 4);
-    u16 version_minor = is_big_endian_ ? read_be_u16(data + 6) : read_le_u16(data + 6);
+    // version_minor is also at offset 6, but we only check major version
     
     // Check version (2.4 is most common)
     if (version_major != 2) {
@@ -128,7 +128,6 @@ Result<usize> PcapReader::read_next() noexcept {
     vtp1_payload_size_ = 0;
     
     // Parse packet layers
-    usize header_offset = offset_;
     Status parse_status = parse_packet();
     if (!parse_status.ok()) {
         parse_errors_++;

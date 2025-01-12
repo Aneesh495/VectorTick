@@ -82,6 +82,9 @@ public:
     // Lower AST expression to IR
     ValueId lower_expression(const query::Expression* expr);
     
+    // Build IR from query statement
+    std::unique_ptr<Function> build_from_query(const query::QueryStmt* stmt);
+    
     // Get current function
     [[nodiscard]] Function* function() noexcept { return function_; }
     [[nodiscard]] const Function* function() const noexcept { return function_; }

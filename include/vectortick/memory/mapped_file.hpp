@@ -3,6 +3,7 @@
 #include "../common/types.hpp"
 #include "../common/status.hpp"
 #include "../common/result.hpp"
+#include "aligned_buffer.hpp"
 #include <string>
 #include <memory>
 

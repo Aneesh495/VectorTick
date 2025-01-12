@@ -36,7 +36,6 @@ public:
         
         while (i < num_values) {
             // Count run length
-            usize run_start = i;
             T run_value = values[i];
             usize run_length = 1;
             
@@ -60,7 +59,6 @@ public:
             } else {
                 // Encode as literals
                 // Find end of literal run
-                usize literal_start = i;
                 usize literal_count = 0;
                 
                 while (i + literal_count < num_values && literal_count < MaxRunLength) {
