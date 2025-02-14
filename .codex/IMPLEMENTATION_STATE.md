@@ -6,19 +6,46 @@
 - Status: IMMUTABLE
 
 ## Current Phase
-- Phase: 1 - Foundation
-- Started: 2026-09-16
-- Current Task: Setting up build system and project structure
+- Phase: 5 - Storage Implementation
+- Started: 2025-01-01
+- Last Update: 2025-01-05
+- Commits: 5
+- Status: In Progress
 
 ## Progress Log
 
-### 2026-09-16 - Phase 1 Start
-- Saved original task prompt
-- Recording SHA-256 hash
-- Next: Create build system, directory structure, common primitives
+### 2025-01-05 - Storage Format Definition
+- Added VTS1 file format header/footer
+- Defined column descriptors and zone maps
+- Bloom filter parameters
+- Next: SegmentWriter/SegmentReader implementation
+
+### 2025-01-04 - Codec Layer
+- VTP1 encoder/decoder
+- Bit-packing, delta encoding
+- Zigzag, varint, group varint
+- RLE, dictionary encoding
+
+### 2025-01-03 - Protocol Layer
+- VTP1 wire protocol
+- PCAP reader implementation
+- CanonicalEvent model
+- EventBatch for columnar processing
+
+### 2025-01-02 - Memory & Concurrency
+- AlignedBuffer, Arena, BufferPool
+- MappedFile for mmap I/O
+- SpscRing, WorkerPool
+
+### 2025-01-01 - Project Foundation
+- Build system setup
+- Core types and utilities
+- CRC32C, SHA-256, hashes
+- Virtual clock
 
 ## Next Actions
-1. Create full directory structure
-2. Write CMakeLists.txt and Makefile
-3. Implement common types, endian, CRC32C primitives
-4. Build test harness
+1. Implement SegmentWriter with columnar encoding
+2. Implement SegmentReader with mmap support
+3. Add Manifest management
+4. Create Journal for atomic commits
+5. Implement Recovery logic
