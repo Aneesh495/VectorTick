@@ -1,6 +1,7 @@
 #include "vectortick/storage/segment_writer.hpp"
 #include "vectortick/codec/bitpack.hpp"
 #include "vectortick/codec/varint.hpp"
+#include "vectortick/codec/rle.hpp"
 #include "vectortick/memory/mapped_file.hpp"
 #include <cstring>
 #include <algorithm>
@@ -43,7 +44,7 @@ Status SegmentWriter::add_event(const CanonicalEvent& event) noexcept {
     }
     
     // Validate event
-    auto status = event.validate();
+    auto status = event::validate(event);
     if (!status.ok()) {
         return status;
     }
@@ -159,8 +160,6 @@ Status SegmentWriter::write_to_file(const std::string& path) noexcept {
     offset = (offset + 63) & ~usize(63);
     
     // Encode each column
-    usize column_data_start = offset;
-    
     // Column 0: exchange_ts_ns
     descriptors[0].offset = offset;
     auto enc_status = encode_column_u64(exchange_ts_ns_, vts1::EncodingType::Delta, 

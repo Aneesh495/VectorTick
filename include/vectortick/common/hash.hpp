@@ -138,7 +138,7 @@ public:
                     s0 ^= s_[0];
                     s1 ^= s_[1];
                 }
-                next();
+                (void)next();
             }
         }
         s_[0] = s0;
@@ -187,7 +187,7 @@ class FnvHash {
 public:
     FnvHash() : hash_(14695981039346656037ULL) {}
     
-    void update(const byte* data, usize length) noexcept {
+    void update(const u8* data, usize length) noexcept {
         for (usize i = 0; i < length; ++i) {
             hash_ ^= data[i];
             hash_ *= 1099511628211ULL;

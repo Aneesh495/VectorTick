@@ -18,21 +18,21 @@ BasicBlock* Builder::create_block(const std::string& name) {
 
 ValueId Builder::create_const_i64(i64 value) {
     ValueId result = function_->create_value(Type::I64, "const");
-    auto instr = std::make_unique<ConstOp>(Constant::i64(value), result);
+    auto instr = std::make_unique<ConstOp>(Constant::i64_const(value), result);
     current_block_->append(std::move(instr));
     return result;
 }
 
 ValueId Builder::create_const_u64(u64 value) {
     ValueId result = function_->create_value(Type::U64, "const");
-    auto instr = std::make_unique<ConstOp>(Constant::u64(value), result);
+    auto instr = std::make_unique<ConstOp>(Constant::u64_const(value), result);
     current_block_->append(std::move(instr));
     return result;
 }
 
 ValueId Builder::create_const_u32(u32 value) {
     ValueId result = function_->create_value(Type::U32, "const");
-    auto instr = std::make_unique<ConstOp>(Constant::u32(value), result);
+    auto instr = std::make_unique<ConstOp>(Constant::u32_const(value), result);
     current_block_->append(std::move(instr));
     return result;
 }
@@ -258,7 +258,6 @@ ValueId Builder::lower_expression(const query::Expression* expr) {
         }
         
         case query::ExprType::ColumnRef: {
-            auto ref = static_cast<const query::ColumnRefExpr*>(expr);
             // Map column name to column ID
             u32 column_id = 0;  // TODO: proper column resolution
             ValueId row_idx = function_->parameters()[0];  // First param is row index
@@ -308,18 +307,49 @@ ValueId Builder::lower_expression(const query::Expression* expr) {
     }
 }
 
+std::unique_ptr<Function> Builder::build_from_query(const query::QueryStmt* stmt) {
+    if (!stmt) return nullptr;
+    
+    // Create function
+    auto func = std::make_unique<Function>("query");
+    function_ = func.get();
+    
+    // Create entry block
+    current_block_ = function_->create_block("entry");
+    
+    // Add a row index parameter
+    function_->add_parameter(function_->create_value(Type::U64, "row_idx"));
+    
+    // Lower WHERE clause if present
+    if (stmt->where_expr) {
+        ValueId cond = lower_expression(stmt->where_expr.get());
+        // For now, just return the condition result
+        create_return(cond);
+    } else {
+        // Return constant 1 (include all rows)
+        ValueId one = create_const_u64(1);
+        create_return(one);
+    }
+    
+    return func;
+}
+
 Type Builder::infer_type(const query::Expression* expr) const {
-    // TODO: implement proper type inference
+    (void)expr;  // TODO: implement proper type inference
     return Type::U64;
 }
 
 Opcode Builder::get_comparison_opcode(query::TokenType op, Type type) const {
     // TODO: implement
+    (void)op;
+    (void)type;
     return Opcode::EqU64;
 }
 
 Opcode Builder::get_arithmetic_opcode(query::TokenType op, Type type) const {
     // TODO: implement
+    (void)op;
+    (void)type;
     return Opcode::AddU64;
 }
 

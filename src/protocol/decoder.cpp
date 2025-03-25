@@ -116,7 +116,7 @@ Status Decoder::decode_quote(const byte* payload, u32 len, CanonicalEvent& event
     event.source_id = 0;
     event.trade_or_order_id = 0;
     
-    return event.validate();
+    return event::validate(event);
 }
 
 Status Decoder::decode_trade(const byte* payload, u32 len, CanonicalEvent& event) noexcept {
@@ -138,7 +138,7 @@ Status Decoder::decode_trade(const byte* payload, u32 len, CanonicalEvent& event
     event.source_id = trade.source_id;
     event.trade_or_order_id = trade.trade_id;
     
-    return event.validate();
+    return event::validate(event);
 }
 
 Status Decoder::decode_book_delta(const byte* payload, u32 len, CanonicalEvent& event) noexcept {
@@ -160,7 +160,7 @@ Status Decoder::decode_book_delta(const byte* payload, u32 len, CanonicalEvent& 
     event.source_id = delta.source_id;
     event.trade_or_order_id = delta.order_id;
     
-    return event.validate();
+    return event::validate(event);
 }
 
 Status Decoder::decode_status(const byte* payload, u32 len, CanonicalEvent& event) noexcept {
@@ -182,7 +182,7 @@ Status Decoder::decode_status(const byte* payload, u32 len, CanonicalEvent& even
     event.source_id = 0;
     event.trade_or_order_id = 0;
     
-    return event.validate();
+    return event::validate(event);
 }
 
 Status Decoder::decode_heartbeat(const byte* payload, u32 len, CanonicalEvent& event) noexcept {

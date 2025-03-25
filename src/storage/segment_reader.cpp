@@ -214,10 +214,6 @@ Status SegmentReader::decode_column(const vts1::ColumnDescriptor& desc,
     
     // Decode based on encoding type
     if (desc.encoding == vts1::EncodingType::Raw) {
-        usize bytes = num_values * (desc.type == vts1::ColumnType::U64 || desc.type == vts1::ColumnType::I64 ? 8 :
-                                    desc.type == vts1::ColumnType::U32 || desc.type == vts1::ColumnType::I32 ? 4 :
-                                    desc.type == vts1::ColumnType::U16 || desc.type == vts1::ColumnType::I16 ? 2 : 1);
-        
         std::memcpy(output, col_data, desc.compressed_size);
         return Status::OK();
     }
@@ -250,7 +246,7 @@ Status SegmentReader::decode_column(const vts1::ColumnDescriptor& desc,
         usize offset = sizeof(u32);
         
         // Read bits per value
-        u32 bits = col_data[offset++];
+        u32 bits = static_cast<u32>(col_data[offset++]);
         
         // Decode packed values
         std::vector<u32> packed(num_values);
@@ -311,7 +307,7 @@ Status SegmentReader::read_column_u8(vts1::ColumnID col, u8* values, usize num_v
         return Status(StatusCode::OutOfRange, "Invalid column ID");
     }
     
-    return decode_column(descriptors_[col], values, num_values);
+    return decode_column(descriptors_[col], reinterpret_cast<byte*>(values), num_values);
 }
 
 u64 SegmentReader::column_min(vts1::ColumnID col) const noexcept {
@@ -354,10 +350,10 @@ Status SegmentReader::validate() const noexcept {
     }
     
     // Validate footer if exists
-    if (header_.footer_offset + vts1::SegmentFooter::Size <= file_size_) {
+    if (header_.footer_offset + sizeof(vts1::SegmentFooter) <= file_size_) {
         vts1::SegmentFooter footer;
         const byte* data = mapping_.data();
-        std::memcpy(&footer, data + header_.footer_offset, vts1::SegmentFooter::Size);
+        std::memcpy(&footer, data + header_.footer_offset, sizeof(vts1::SegmentFooter));
         
         if (footer.commit_marker != vts1::SegmentFooter::CommittedMarker) {
             return Status(StatusCode::SegmentCorrupted, "Segment not committed");
@@ -367,7 +363,7 @@ Status SegmentReader::validate() const noexcept {
         vts1::SegmentFooter temp = footer;
         temp.footer_crc = 0;
         u32 computed_crc = Crc32C::compute(reinterpret_cast<byte*>(&temp),
-                                           vts1::SegmentFooter::Size - sizeof(u32));
+                                           sizeof(vts1::SegmentFooter) - sizeof(u32));
         
         if (computed_crc != footer.footer_crc) {
             return Status(StatusCode::SegmentChecksumFailed, "Footer CRC mismatch");

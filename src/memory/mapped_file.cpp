@@ -1,10 +1,13 @@
 #include "vectortick/memory/mapped_file.hpp"
+#include "vectortick/memory/mapped_file.hpp"
+#include "vectortick/memory/aligned_buffer.hpp"
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <cstring>
 #include <cstdlib>
+#include <vector>
 
 namespace vectortick {
 

@@ -104,7 +104,7 @@ struct UDPHeader {
 class PcapReader {
 public:
     PcapReader() = default;
-    explicit PcapReader(const std::string& path) { open(path); }
+    explicit PcapReader(const std::string& path) { (void)open(path); }
     
     // Open PCAP file
     [[nodiscard]] Status open(const std::string& path) noexcept;

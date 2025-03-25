@@ -1,5 +1,7 @@
 #include "vectortick/common/crc32c.hpp"
 
+#include "vectortick/common/crc32c.hpp"
+
 #if defined(__x86_64__) || defined(_M_X64)
 #include <cpuid.h>
 #include <nmmintrin.h>
@@ -63,10 +65,11 @@ u32 Crc32C::compute_sw(u32 init_crc, const byte* data, usize length) noexcept {
     u32 crc = init_crc;
     
     // Process byte by byte
-    const byte* end = data + length;
-    while (data < end) {
-        crc = table_[(crc ^ *data) & 0xFF] ^ (crc >> 8);
-        ++data;
+    const u8* ptr = reinterpret_cast<const u8*>(data);
+    const u8* end = ptr + length;
+    while (ptr < end) {
+        crc = table_[(crc ^ *ptr) & 0xFF] ^ (crc >> 8);
+        ++ptr;
     }
     
     return crc;
@@ -76,30 +79,37 @@ u32 Crc32C::compute_sw(u32 init_crc, const byte* data, usize length) noexcept {
 #if defined(__x86_64__) || defined(_M_X64)
 u32 Crc32C::compute_sse42(u32 init_crc, const byte* data, usize length) noexcept {
     u32 crc = init_crc;
+    const u8* ptr = reinterpret_cast<const u8*>(data);
     
     // Process 8 bytes at a time
     while (length >= 8) {
-        crc = _mm_crc32_u64(crc, *reinterpret_cast<const u64*>(data));
-        data += 8;
+        u64 val;
+        __builtin_memcpy(&val, ptr, 8);
+        crc = static_cast<u32>(_mm_crc32_u64(crc, val));
+        ptr += 8;
         length -= 8;
     }
     
     // Process 4 bytes
     if (length >= 4) {
-        crc = _mm_crc32_u32(crc, *reinterpret_cast<const u32*>(data));
-        data += 4;
+        u32 val;
+        __builtin_memcpy(&val, ptr, 4);
+        crc = _mm_crc32_u32(crc, val);
+        ptr += 4;
         length -= 4;
     }
     
     // Process remaining bytes
     if (length >= 2) {
-        crc = _mm_crc32_u16(crc, *reinterpret_cast<const u16*>(data));
-        data += 2;
+        u16 val;
+        __builtin_memcpy(&val, ptr, 2);
+        crc = _mm_crc32_u16(crc, val);
+        ptr += 2;
         length -= 2;
     }
     
     if (length >= 1) {
-        crc = _mm_crc32_u8(crc, *data);
+        crc = _mm_crc32_u8(crc, *ptr);
     }
     
     return crc;
@@ -110,37 +120,38 @@ u32 Crc32C::compute_sse42(u32 init_crc, const byte* data, usize length) noexcept
 #if defined(__aarch64__) || defined(_M_ARM64)
 u32 Crc32C::compute_arm(u32 init_crc, const byte* data, usize length) noexcept {
     u32 crc = init_crc;
+    const u8* ptr = reinterpret_cast<const u8*>(data);
     
     // Process 8 bytes at a time using CRC32CX
     while (length >= 8) {
         u64 val;
-        __builtin_memcpy(&val, data, 8);
+        __builtin_memcpy(&val, ptr, 8);
         crc = __crc32cd(crc, val);
-        data += 8;
+        ptr += 8;
         length -= 8;
     }
     
     // Process 4 bytes using CRC32CW
     if (length >= 4) {
         u32 val;
-        __builtin_memcpy(&val, data, 4);
+        __builtin_memcpy(&val, ptr, 4);
         crc = __crc32cw(crc, val);
-        data += 4;
+        ptr += 4;
         length -= 4;
     }
     
     // Process 2 bytes using CRC32CH
     if (length >= 2) {
         u16 val;
-        __builtin_memcpy(&val, data, 2);
+        __builtin_memcpy(&val, ptr, 2);
         crc = __crc32ch(crc, val);
-        data += 2;
+        ptr += 2;
         length -= 2;
     }
     
     // Process remaining byte
     if (length >= 1) {
-        crc = __crc32cb(crc, *data);
+        crc = __crc32cb(crc, *ptr);
     }
     
     return crc;

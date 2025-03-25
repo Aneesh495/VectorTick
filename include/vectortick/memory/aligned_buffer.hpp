@@ -15,7 +15,7 @@ public:
     
     explicit AlignedBuffer(usize size) 
         : data_(nullptr), size_(0), capacity_(0) {
-        allocate(size);
+        (void)allocate(size);
     }
     
     ~AlignedBuffer() {
@@ -56,7 +56,7 @@ public:
         
         // Align to 64 bytes
         constexpr usize alignment = 64;
-        usize alloc_size = align_up(size, alignment);
+        usize alloc_size = ((size + alignment - 1) / alignment) * alignment;
         
         // Use aligned_alloc (C++17)
         void* ptr = std::aligned_alloc(alignment, alloc_size);
