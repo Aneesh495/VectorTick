@@ -157,6 +157,8 @@ Token Lexer::read_identifier() noexcept {
 Token Lexer::read_operator() noexcept {
     usize start_line = line_;
     usize start_col = column_;
+    (void)start_line;  // Used by make_token
+    (void)start_col;   // Used by make_token
     char c = current();
     
     switch (c) {

@@ -21,7 +21,8 @@ using usize = std::size_t;
 using isize = std::ptrdiff_t;
 
 // Byte type for raw memory operations
-using byte = std::byte;
+// Using u8 for better compatibility with standard library functions
+using byte = u8;
 
 // Strong type for hash values
 struct Hash256 {
@@ -86,7 +87,7 @@ struct CanonicalEvent {
     // Total logical size: 56 bytes
     static constexpr usize LogicalSize = 56;
     
-    // Validate event
+    // Basic validation
     [[nodiscard]] bool is_valid() const noexcept {
         if (event_type == EventType::Invalid) return false;
         if (side == Side::Invalid && event_type != EventType::Heartbeat) return false;

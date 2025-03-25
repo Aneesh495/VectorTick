@@ -70,26 +70,26 @@ private:
 // Constant value
 struct Constant {
     Type type;
-    std::variant<i64, u64, u32, u16, u8, bool> value;
+    std::variant<std::int64_t, std::uint64_t, std::uint32_t, std::uint16_t, std::uint8_t, bool> value;
     
-    [[nodiscard]] static Constant i64(i64 val) {
+    [[nodiscard]] static Constant i64_const(i64 val) {
         Constant c;
         c.type = Type::I64;
-        c.value = val;
+        c.value = static_cast<std::int64_t>(val);
         return c;
     }
     
-    [[nodiscard]] static Constant u64(u64 val) {
+    [[nodiscard]] static Constant u64_const(u64 val) {
         Constant c;
         c.type = Type::U64;
-        c.value = val;
+        c.value = static_cast<std::uint64_t>(val);
         return c;
     }
     
-    [[nodiscard]] static Constant u32(u32 val) {
+    [[nodiscard]] static Constant u32_const(u32 val) {
         Constant c;
         c.type = Type::U32;
-        c.value = val;
+        c.value = static_cast<std::uint32_t>(val);
         return c;
     }
     
@@ -100,9 +100,9 @@ struct Constant {
         return c;
     }
     
-    [[nodiscard]] i64 get_i64() const { return std::get<i64>(value); }
-    [[nodiscard]] u64 get_u64() const { return std::get<u64>(value); }
-    [[nodiscard]] u32 get_u32() const { return std::get<u32>(value); }
+    [[nodiscard]] i64 get_i64() const { return static_cast<i64>(std::get<std::int64_t>(value)); }
+    [[nodiscard]] u64 get_u64() const { return static_cast<u64>(std::get<std::uint64_t>(value)); }
+    [[nodiscard]] u32 get_u32() const { return static_cast<u32>(std::get<std::uint32_t>(value)); }
     [[nodiscard]] bool get_bool() const { return std::get<bool>(value); }
 };
 

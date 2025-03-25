@@ -113,20 +113,21 @@ private:
 class ConstOp : public Instruction {
 public:
     ConstOp(const Constant& constant, ValueId result)
-        : Instruction(Opcode::ConstU64, {}, result, constant.type), constant_(constant) {
-        if (constant.type == Type::I64) {
-            const_cast<Opcode&>(opcode_) = Opcode::ConstI64;
-        } else if (constant.type == Type::U32) {
-            const_cast<Opcode&>(opcode_) = Opcode::ConstU32;
-        } else if (constant.type == Type::I1) {
-            const_cast<Opcode&>(opcode_) = Opcode::ConstBool;
-        }
-    }
+        : Instruction(choose_opcode(constant.type), {}, result, constant.type), constant_(constant) {}
     
     [[nodiscard]] const Constant& constant() const noexcept { return constant_; }
 
 private:
     Constant constant_;
+    
+    [[nodiscard]] static Opcode choose_opcode(Type t) noexcept {
+        switch (t) {
+            case Type::I64: return Opcode::ConstI64;
+            case Type::U32: return Opcode::ConstU32;
+            case Type::I1: return Opcode::ConstBool;
+            default: return Opcode::ConstU64;
+        }
+    }
 };
 
 class BranchOp : public Instruction {
