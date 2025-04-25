@@ -60,24 +60,20 @@ We will implement **custom JIT backends** for x86-64 and AArch64 without using L
 
 ## Rationale
 
-### Why Not Interpretation?
+### Why Not Interpretation Alone?
 
-| Metric | Interpreter | JIT |
-|--------|-------------|-----|
-| Latency | 100+ ns/op | 0.5-2 ns/op |
-| Throughput | 10M ops/sec | 2B ops/sec |
-| Memory | Low | Code cache |
-
-For analytics workloads, JIT compilation provides 10-100x speedup.
+A native-code path could reduce interpreter overhead for repeated analytics
+queries. That benefit has not been measured in this repository. The reference
+interpreter remains the baseline for future correctness and performance tests.
 
 ### Why Not LLVM?
 
 | Aspect | LLVM JIT | Custom JIT |
 |--------|----------|------------|
-| Binary Size | 50+ MB | < 1 MB |
-| Compile Time | 1-10 ms | 0.1-1 ms |
+| Binary Size | Larger dependency | Smaller in-repo code generator |
+| Compile Time | Depends on optimization settings | To be measured |
 | Dependencies | Heavy | None |
-| Optimization | World-class | Good enough |
+| Optimization | Broad existing passes | Limited in-repo passes |
 | Portability | Many targets | x86-64, ARM64 |
 | Control | Limited | Full |
 
@@ -134,11 +130,6 @@ For our use case:
 
 ## Performance
 
-Benchmarks on Apple M1 (Release build):
-
-| Operation | Time |
-|-----------|------|
-| IR Compilation | 20 μs |
-| JIT Compilation | 100 μs |
-| JIT Execution (simple add) | 0.5 ns |
-| JIT Execution (complex query) | 5 ns |
+No reproducible JIT benchmark results are included in this repository. The
+native-code path needs a passing build, correctness tests, and recorded
+measurements before claiming a speedup over the reference interpreter.

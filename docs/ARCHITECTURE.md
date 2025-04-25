@@ -1,6 +1,9 @@
 # VectorTick Architecture
 
-This document provides a detailed technical overview of VectorTick's architecture, design decisions, and implementation details.
+This document describes VectorTick's intended architecture and the source
+modules behind it. It is not a validation report. The clean macOS arm64 build
+currently fails, and the complete query-to-JIT path has not been tested. See
+[implementation status](BUILD_SPEC.md) for the current boundary.
 
 ## Table of Contents
 
@@ -20,11 +23,11 @@ This document provides a detailed technical overview of VectorTick's architectur
 
 ## Overview
 
-VectorTick is a high-performance market data analytics engine built around three core principles:
+VectorTick is a market data analytics prototype built around three design goals:
 
 1. **Columnar Storage**: Data is stored in columnar format for efficient compression and SIMD-friendly access patterns
-2. **SSA IR**: Queries are compiled to a typed SSA intermediate representation for optimization
-3. **Native Execution**: IR is compiled to native machine code via custom JIT backends
+2. **SSA IR**: Represent query operations in a typed intermediate form
+3. **Native Execution**: Generate native code from IR once the JIT paths are integrated and tested
 
 The architecture follows a layered approach where each layer depends only on the layers below it, enabling clean separation of concerns and testability.
 
@@ -37,9 +40,9 @@ The architecture follows a layered approach where each layer depends only on the
 │ Layer 5: Applications (ingest, query, replay, inspect, demo)                │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ Layer 4: Query Engine (lexer, parser, AST, binder)                          │
-│           + Execution (interpreter, vector VM, JIT)                          │
+│           + Execution (reference interpreter, JIT source)                   │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ Layer 3: IR Layer (builder, basic blocks, instructions, functions, optimizer)│
+│ Layer 3: IR Layer (builder, basic blocks, instructions, functions)           │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ Layer 2: Storage Engine (segment reader/writer, codecs, indexes)            │
 │           + Protocol Layer (VTP1, PCAP)                                      │
