@@ -1,6 +1,7 @@
 #include "vectortick/storage/segment_reader.hpp"
 #include "vectortick/codec/bitpack.hpp"
 #include "vectortick/codec/varint.hpp"
+#include "vectortick/codec/rle.hpp"
 #include <cstring>
 
 namespace vectortick {
@@ -61,6 +62,11 @@ Status SegmentReader::read_header() noexcept {
     
     if (computed_crc != header_.header_crc) {
         return Status(StatusCode::SegmentChecksumFailed, "Header CRC mismatch");
+    }
+    
+    // Validate schema hash
+    if (header_.schema_hash != vts1::compute_canonical_schema_hash()) {
+        return Status(StatusCode::SegmentSchemaMismatch, "VTS1 schema hash mismatch");
     }
     
     segment_id_ = header_.segment_id;
@@ -125,78 +131,76 @@ Status SegmentReader::read_descriptors() noexcept {
     return Status::OK();
 }
 
+Status SegmentReader::read_all_events(std::vector<CanonicalEvent>& events) const noexcept {
+    events.clear();
+    if (row_count_ == 0) return Status::OK();
+    
+    std::vector<u64> exchange_ts(row_count_);
+    std::vector<u64> receive_ts(row_count_);
+    std::vector<u64> seqs(row_count_);
+    std::vector<u32> inst_ids(row_count_);
+    std::vector<u8> ev_types(row_count_);
+    std::vector<u8> sides(row_count_);
+    std::vector<u16> flags(row_count_);
+    std::vector<i64> prices(row_count_);
+    std::vector<u32> qtys(row_count_);
+    std::vector<u16> venues(row_count_);
+    std::vector<u16> sources(row_count_);
+    std::vector<u64> trade_order_ids(row_count_);
+    
+    auto s = read_column_u64(vts1::ColumnID::ExchangeTsNs, exchange_ts.data(), row_count_);
+    if (!s.ok()) return s;
+    s = read_column_u64(vts1::ColumnID::ReceiveTsNs, receive_ts.data(), row_count_);
+    if (!s.ok()) return s;
+    s = read_column_u64(vts1::ColumnID::Sequence, seqs.data(), row_count_);
+    if (!s.ok()) return s;
+    s = read_column_u32(vts1::ColumnID::InstrumentId, inst_ids.data(), row_count_);
+    if (!s.ok()) return s;
+    s = read_column_u8(vts1::ColumnID::EventType, ev_types.data(), row_count_);
+    if (!s.ok()) return s;
+    s = read_column_u8(vts1::ColumnID::Side, sides.data(), row_count_);
+    if (!s.ok()) return s;
+    s = read_column_u16(vts1::ColumnID::Flags, flags.data(), row_count_);
+    if (!s.ok()) return s;
+    s = read_column_i64(vts1::ColumnID::PriceTicks, prices.data(), row_count_);
+    if (!s.ok()) return s;
+    s = read_column_u32(vts1::ColumnID::Quantity, qtys.data(), row_count_);
+    if (!s.ok()) return s;
+    s = read_column_u16(vts1::ColumnID::VenueId, venues.data(), row_count_);
+    if (!s.ok()) return s;
+    s = read_column_u16(vts1::ColumnID::SourceId, sources.data(), row_count_);
+    if (!s.ok()) return s;
+    s = read_column_u64(vts1::ColumnID::TradeOrOrderId, trade_order_ids.data(), row_count_);
+    if (!s.ok()) return s;
+    
+    events.resize(row_count_);
+    for (usize i = 0; i < row_count_; ++i) {
+        events[i].exchange_ts_ns = exchange_ts[i];
+        events[i].receive_ts_ns = receive_ts[i];
+        events[i].sequence = seqs[i];
+        events[i].instrument_id = inst_ids[i];
+        events[i].event_type = static_cast<EventType>(ev_types[i]);
+        events[i].side = static_cast<Side>(sides[i]);
+        events[i].flags = flags[i];
+        events[i].price_ticks = prices[i];
+        events[i].quantity = qtys[i];
+        events[i].venue_id = venues[i];
+        events[i].source_id = sources[i];
+        events[i].trade_or_order_id = trade_order_ids[i];
+    }
+    
+    return Status::OK();
+}
+
 Status SegmentReader::read_event(usize row_idx, CanonicalEvent& event) const noexcept {
     if (row_idx >= row_count_) {
         return Status(StatusCode::OutOfRange, "Row index out of range");
     }
     
-    // For now, read each column individually
-    u64 val_u64;
-    u32 val_u32;
-    i64 val_i64;
-    u16 val_u16;
-    u8 val_u8;
-    
-    // exchange_ts_ns
-    auto status = read_column_u64(vts1::ColumnID::ExchangeTsNs, &val_u64, 1);
-    if (!status.ok()) return status;
-    event.exchange_ts_ns = val_u64;
-    
-    // receive_ts_ns
-    status = read_column_u64(vts1::ColumnID::ReceiveTsNs, &val_u64, 1);
-    if (!status.ok()) return status;
-    event.receive_ts_ns = val_u64;
-    
-    // sequence
-    status = read_column_u64(vts1::ColumnID::Sequence, &val_u64, 1);
-    if (!status.ok()) return status;
-    event.sequence = val_u64;
-    
-    // instrument_id
-    status = read_column_u32(vts1::ColumnID::InstrumentId, &val_u32, 1);
-    if (!status.ok()) return status;
-    event.instrument_id = val_u32;
-    
-    // event_type
-    status = read_column_u8(vts1::ColumnID::EventType, &val_u8, 1);
-    if (!status.ok()) return status;
-    event.event_type = static_cast<EventType>(val_u8);
-    
-    // side
-    status = read_column_u8(vts1::ColumnID::Side, &val_u8, 1);
-    if (!status.ok()) return status;
-    event.side = static_cast<Side>(val_u8);
-    
-    // flags
-    status = read_column_u16(vts1::ColumnID::Flags, &val_u16, 1);
-    if (!status.ok()) return status;
-    event.flags = val_u16;
-    
-    // price_ticks
-    status = read_column_i64(vts1::ColumnID::PriceTicks, &val_i64, 1);
-    if (!status.ok()) return status;
-    event.price_ticks = val_i64;
-    
-    // quantity
-    status = read_column_u32(vts1::ColumnID::Quantity, &val_u32, 1);
-    if (!status.ok()) return status;
-    event.quantity = val_u32;
-    
-    // venue_id
-    status = read_column_u16(vts1::ColumnID::VenueId, &val_u16, 1);
-    if (!status.ok()) return status;
-    event.venue_id = val_u16;
-    
-    // source_id
-    status = read_column_u16(vts1::ColumnID::SourceId, &val_u16, 1);
-    if (!status.ok()) return status;
-    event.source_id = val_u16;
-    
-    // trade_or_order_id
-    status = read_column_u64(vts1::ColumnID::TradeOrOrderId, &val_u64, 1);
-    if (!status.ok()) return status;
-    event.trade_or_order_id = val_u64;
-    
+    std::vector<CanonicalEvent> all;
+    auto s = read_all_events(all);
+    if (!s.ok()) return s;
+    event = all[row_idx];
     return Status::OK();
 }
 
@@ -219,29 +223,45 @@ Status SegmentReader::decode_column(const vts1::ColumnDescriptor& desc,
     }
     
     if (desc.encoding == vts1::EncodingType::Delta) {
-        // Read first value
-        std::memcpy(output, col_data, sizeof(u64));
-        usize offset = sizeof(u64);
-        
-        u64* values = reinterpret_cast<u64*>(output);
-        
-        // Read deltas
-        for (usize i = 1; i < num_values; ++i) {
-            u64 delta;
-            usize consumed = codec::VarIntU::decode(col_data + offset, desc.compressed_size - offset, delta);
-            if (consumed == 0) {
-                return Status(StatusCode::SegmentCorrupted, "Failed to decode delta");
+        if (desc.type == vts1::ColumnType::I64) {
+            i64 first_val = 0;
+            std::memcpy(&first_val, col_data, sizeof(i64));
+            usize offset = sizeof(i64);
+            i64* values = reinterpret_cast<i64*>(output);
+            if (num_values > 0) values[0] = first_val;
+            for (usize i = 1; i < num_values; ++i) {
+                u64 zigzag = 0;
+                usize consumed = codec::VarIntU::decode(col_data + offset, desc.compressed_size - offset, zigzag);
+                if (consumed == 0) {
+                    return Status(StatusCode::SegmentCorrupted, "Failed to decode i64 delta");
+                }
+                offset += consumed;
+                i64 delta = codec::ZigZag::decode(zigzag);
+                values[i] = values[i-1] + delta;
             }
-            offset += consumed;
-            values[i] = values[i-1] + delta;
+            return Status::OK();
+        } else {
+            u64 first_val = 0;
+            std::memcpy(&first_val, col_data, sizeof(u64));
+            usize offset = sizeof(u64);
+            u64* values = reinterpret_cast<u64*>(output);
+            if (num_values > 0) values[0] = first_val;
+            for (usize i = 1; i < num_values; ++i) {
+                u64 delta = 0;
+                usize consumed = codec::VarIntU::decode(col_data + offset, desc.compressed_size - offset, delta);
+                if (consumed == 0) {
+                    return Status(StatusCode::SegmentCorrupted, "Failed to decode u64 delta");
+                }
+                offset += consumed;
+                values[i] = values[i-1] + delta;
+            }
+            return Status::OK();
         }
-        
-        return Status::OK();
     }
     
     if (desc.encoding == vts1::EncodingType::BitPacked) {
         // Read reference value
-        u32 reference;
+        u32 reference = 0;
         std::memcpy(&reference, col_data, sizeof(u32));
         usize offset = sizeof(u32);
         
@@ -252,17 +272,34 @@ Status SegmentReader::decode_column(const vts1::ColumnDescriptor& desc,
         std::vector<u32> packed(num_values);
         usize consumed = codec::BitPackU32::decode(col_data + offset, desc.compressed_size - offset,
                                                     bits, packed.data(), num_values);
-        if (consumed == 0) {
+        if (consumed == 0 && num_values > 0) {
             return Status(StatusCode::SegmentCorrupted, "Failed to decode bit-packed values");
         }
         
         // Add reference back
-        u32* values = reinterpret_cast<u32*>(output);
-        for (usize i = 0; i < num_values; ++i) {
-            values[i] = packed[i] + reference;
+        if (desc.type == vts1::ColumnType::U16) {
+            u16* values = reinterpret_cast<u16*>(output);
+            for (usize i = 0; i < num_values; ++i) {
+                values[i] = static_cast<u16>(packed[i] + reference);
+            }
+        } else {
+            u32* values = reinterpret_cast<u32*>(output);
+            for (usize i = 0; i < num_values; ++i) {
+                values[i] = packed[i] + reference;
+            }
         }
-        
         return Status::OK();
+    }
+    
+    if (desc.encoding == vts1::EncodingType::RLE) {
+        if (desc.type == vts1::ColumnType::U8) {
+            usize consumed = codec::RLE::decode<u8>(col_data, desc.compressed_size,
+                                                    reinterpret_cast<u8*>(output), num_values);
+            if (consumed == 0 && num_values > 0) {
+                return Status(StatusCode::SegmentCorrupted, "Failed to decode RLE");
+            }
+            return Status::OK();
+        }
     }
     
     // Default: treat as raw
@@ -344,15 +381,26 @@ bool SegmentReader::might_contain_instrument(u32 instrument_id) const noexcept {
 }
 
 Status SegmentReader::validate() const noexcept {
-    // Already validated during open
     if (!is_open()) {
         return Status(StatusCode::InvalidMapping, "No segment open");
+    }
+    
+    const byte* data = mapping_.data();
+    
+    // Check all column descriptors and data CRCs
+    for (const auto& desc : descriptors_) {
+        if (desc.offset + desc.compressed_size > file_size_) {
+            return Status(StatusCode::SegmentInvalidBlock, "Column offset exceeds file size");
+        }
+        u32 data_crc = Crc32C::compute(data + desc.offset, desc.compressed_size);
+        if (data_crc != desc.data_crc) {
+            return Status(StatusCode::SegmentChecksumFailed, "Column data CRC mismatch");
+        }
     }
     
     // Validate footer if exists
     if (header_.footer_offset + sizeof(vts1::SegmentFooter) <= file_size_) {
         vts1::SegmentFooter footer;
-        const byte* data = mapping_.data();
         std::memcpy(&footer, data + header_.footer_offset, sizeof(vts1::SegmentFooter));
         
         if (footer.commit_marker != vts1::SegmentFooter::CommittedMarker) {
@@ -367,6 +415,26 @@ Status SegmentReader::validate() const noexcept {
         
         if (computed_crc != footer.footer_crc) {
             return Status(StatusCode::SegmentChecksumFailed, "Footer CRC mismatch");
+        }
+        
+        // Validate descriptor table hash if present
+        if (footer.descriptor_table_hash != 0) {
+            u32 desc_hash = Crc32C::compute(data + header_.descriptor_offset,
+                                            descriptors_.size() * vts1::ColumnDescriptor::Size);
+            if (footer.descriptor_table_hash != desc_hash) {
+                return Status(StatusCode::SegmentChecksumFailed, "Descriptor table hash mismatch");
+            }
+        }
+        
+        // Validate segment digest if present
+        if (footer.segment_digest != 0) {
+            u64 computed_digest = 0;
+            for (const auto& desc : descriptors_) {
+                computed_digest = hash_combine(computed_digest, desc.data_crc);
+            }
+            if (footer.segment_digest != computed_digest) {
+                return Status(StatusCode::SegmentChecksumFailed, "Segment digest mismatch");
+            }
         }
     }
     

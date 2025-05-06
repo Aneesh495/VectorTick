@@ -100,10 +100,27 @@ struct Constant {
         return c;
     }
     
-    [[nodiscard]] i64 get_i64() const { return static_cast<i64>(std::get<std::int64_t>(value)); }
-    [[nodiscard]] u64 get_u64() const { return static_cast<u64>(std::get<std::uint64_t>(value)); }
-    [[nodiscard]] u32 get_u32() const { return static_cast<u32>(std::get<std::uint32_t>(value)); }
-    [[nodiscard]] bool get_bool() const { return std::get<bool>(value); }
+    [[nodiscard]] u64 as_u64() const noexcept {
+        return std::visit([](auto&& v) -> u64 {
+            using T = std::decay_t<decltype(v)>;
+            if constexpr (std::is_same_v<T, bool>) {
+                return v ? 1ULL : 0ULL;
+            } else if constexpr (std::is_signed_v<T>) {
+                return static_cast<u64>(static_cast<i64>(v));
+            } else {
+                return static_cast<u64>(v);
+            }
+        }, value);
+    }
+    
+    [[nodiscard]] i64 as_i64() const noexcept {
+        return static_cast<i64>(as_u64());
+    }
+    
+    [[nodiscard]] i64 get_i64() const noexcept { return as_i64(); }
+    [[nodiscard]] u64 get_u64() const noexcept { return as_u64(); }
+    [[nodiscard]] u32 get_u32() const noexcept { return static_cast<u32>(as_u64()); }
+    [[nodiscard]] bool get_bool() const noexcept { return as_u64() != 0; }
 };
 
 } // namespace ir

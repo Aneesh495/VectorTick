@@ -24,7 +24,7 @@ Status PcapReader::parse_global_header() noexcept {
     const byte* data = mapping_.data();
     
     // Read magic number to determine endianness
-    u32 magic = read_be_u32(data);
+    u32 magic = read_le_u32(data);
     
     switch (magic) {
         case GlobalHeader::MagicLE:
@@ -45,14 +45,6 @@ Status PcapReader::parse_global_header() noexcept {
             break;
         default:
             return Status(StatusCode::PcapInvalidHeader, "Invalid PCAP magic number");
-    }
-    
-    // Read rest of header using correct endianness
-    if (is_big_endian_) {
-        // Already read as big-endian
-    } else {
-        // Need to re-read as little-endian
-        magic = read_le_u32(data);
     }
     
     u16 version_major = is_big_endian_ ? read_be_u16(data + 4) : read_le_u16(data + 4);

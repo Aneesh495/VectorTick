@@ -9,6 +9,7 @@ const char* token_type_name(TokenType type) noexcept {
         case TokenType::Eof: return "EOF";
         case TokenType::IntegerLiteral: return "IntegerLiteral";
         case TokenType::Identifier: return "Identifier";
+        case TokenType::Select: return "SELECT";
         case TokenType::From: return "FROM";
         case TokenType::Where: return "WHERE";
         case TokenType::Let: return "LET";
@@ -23,6 +24,14 @@ const char* token_type_name(TokenType type) noexcept {
         case TokenType::True: return "TRUE";
         case TokenType::False: return "FALSE";
         case TokenType::Tumble: return "TUMBLE";
+        case TokenType::As: return "AS";
+        case TokenType::Asc: return "ASC";
+        case TokenType::Desc: return "DESC";
+        case TokenType::Count: return "COUNT";
+        case TokenType::Sum: return "SUM";
+        case TokenType::Min: return "MIN";
+        case TokenType::Max: return "MAX";
+        case TokenType::Avg: return "AVG";
         case TokenType::Plus: return "+";
         case TokenType::Minus: return "-";
         case TokenType::Star: return "*";
@@ -178,7 +187,7 @@ Token Lexer::read_operator() noexcept {
                 advance();
                 return make_token(TokenType::Equal);
             }
-            return error_token("Expected '=='");
+            return make_token(TokenType::Equal);
         
         case '!':
             advance();
@@ -230,21 +239,43 @@ Token Lexer::read_operator() noexcept {
     }
 }
 
+namespace {
+inline bool iequals(std::string_view a, std::string_view b) noexcept {
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i) {
+        if (std::toupper(static_cast<unsigned char>(a[i])) !=
+            std::toupper(static_cast<unsigned char>(b[i]))) {
+            return false;
+        }
+    }
+    return true;
+}
+} // namespace
+
 TokenType Lexer::lookup_keyword(std::string_view ident) noexcept {
-    if (ident == "FROM") return TokenType::From;
-    if (ident == "WHERE") return TokenType::Where;
-    if (ident == "LET") return TokenType::Let;
-    if (ident == "GROUP") return TokenType::Group;
-    if (ident == "BY") return TokenType::By;
-    if (ident == "AGG") return TokenType::Agg;
-    if (ident == "ORDER") return TokenType::Order;
-    if (ident == "LIMIT") return TokenType::Limit;
-    if (ident == "AND") return TokenType::And;
-    if (ident == "OR") return TokenType::Or;
-    if (ident == "NOT") return TokenType::Not;
-    if (ident == "TRUE") return TokenType::True;
-    if (ident == "FALSE") return TokenType::False;
-    if (ident == "TUMBLE") return TokenType::Tumble;
+    if (iequals(ident, "SELECT")) return TokenType::Select;
+    if (iequals(ident, "FROM")) return TokenType::From;
+    if (iequals(ident, "WHERE")) return TokenType::Where;
+    if (iequals(ident, "LET")) return TokenType::Let;
+    if (iequals(ident, "GROUP")) return TokenType::Group;
+    if (iequals(ident, "BY")) return TokenType::By;
+    if (iequals(ident, "AGG")) return TokenType::Agg;
+    if (iequals(ident, "ORDER")) return TokenType::Order;
+    if (iequals(ident, "LIMIT")) return TokenType::Limit;
+    if (iequals(ident, "AND")) return TokenType::And;
+    if (iequals(ident, "OR")) return TokenType::Or;
+    if (iequals(ident, "NOT")) return TokenType::Not;
+    if (iequals(ident, "TRUE")) return TokenType::True;
+    if (iequals(ident, "FALSE")) return TokenType::False;
+    if (iequals(ident, "TUMBLE")) return TokenType::Tumble;
+    if (iequals(ident, "AS")) return TokenType::As;
+    if (iequals(ident, "ASC")) return TokenType::Asc;
+    if (iequals(ident, "DESC")) return TokenType::Desc;
+    if (iequals(ident, "COUNT")) return TokenType::Count;
+    if (iequals(ident, "SUM")) return TokenType::Sum;
+    if (iequals(ident, "MIN")) return TokenType::Min;
+    if (iequals(ident, "MAX")) return TokenType::Max;
+    if (iequals(ident, "AVG")) return TokenType::Avg;
     
     return TokenType::Identifier;
 }

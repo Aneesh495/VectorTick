@@ -17,6 +17,7 @@ enum class TokenType : u8 {
     Identifier,
     
     // Keywords
+    Select,
     From,
     Where,
     Let,
@@ -31,6 +32,14 @@ enum class TokenType : u8 {
     True,
     False,
     Tumble,
+    As,
+    Asc,
+    Desc,
+    Count,
+    Sum,
+    Min,
+    Max,
+    Avg,
     
     // Operators
     Plus,           // +
@@ -78,7 +87,7 @@ struct Token {
         : type(t), text(txt), int_value(val), line(ln), column(col) {}
     
     [[nodiscard]] bool is_keyword() const noexcept {
-        return type >= TokenType::From && type <= TokenType::Tumble;
+        return type >= TokenType::Select && type <= TokenType::Avg;
     }
     
     [[nodiscard]] bool is_operator() const noexcept {

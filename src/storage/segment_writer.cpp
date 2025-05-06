@@ -127,7 +127,7 @@ Status SegmentWriter::write_to_file(const std::string& path) noexcept {
     vts1::SegmentHeader header = {};
     header.magic = Magic::VTS1;
     header.version = Version::VTS1;
-    header.schema_hash = 0;  // TODO: Compute schema hash
+    header.schema_hash = vts1::compute_canonical_schema_hash();
     header.segment_id = segment_id_;
     header.row_count = row_count_;
     header.min_timestamp = min_timestamp_;
@@ -145,7 +145,7 @@ Status SegmentWriter::write_to_file(const std::string& path) noexcept {
     for (usize i = 0; i < vts1::ColumnCount; ++i) {
         descriptors[i].column_id = static_cast<u32>(i);
         descriptors[i].type = vts1::get_column_type(static_cast<vts1::ColumnID>(i));
-        descriptors[i].encoding = vts1::EncodingType::Raw;  // Start with raw
+        descriptors[i].encoding = vts1::EncodingType::Raw;  // Will be set per-column below
         descriptors[i].offset = 0;
         descriptors[i].compressed_size = 0;
         descriptors[i].uncompressed_size = row_count_ * sizeof(u64);  // Estimate
@@ -162,6 +162,7 @@ Status SegmentWriter::write_to_file(const std::string& path) noexcept {
     // Encode each column
     // Column 0: exchange_ts_ns
     descriptors[0].offset = offset;
+    descriptors[0].encoding = vts1::EncodingType::Delta;
     auto enc_status = encode_column_u64(exchange_ts_ns_, vts1::EncodingType::Delta, 
                                          data, offset, estimated);
     if (!enc_status.ok()) return enc_status;
@@ -172,6 +173,7 @@ Status SegmentWriter::write_to_file(const std::string& path) noexcept {
     
     // Column 1: receive_ts_ns
     descriptors[1].offset = offset;
+    descriptors[1].encoding = vts1::EncodingType::Delta;
     enc_status = encode_column_u64(receive_ts_ns_, vts1::EncodingType::Delta,
                                     data, offset, estimated);
     if (!enc_status.ok()) return enc_status;
@@ -180,6 +182,7 @@ Status SegmentWriter::write_to_file(const std::string& path) noexcept {
     
     // Column 2: sequence
     descriptors[2].offset = offset;
+    descriptors[2].encoding = vts1::EncodingType::Delta;
     enc_status = encode_column_u64(sequences_, vts1::EncodingType::Delta,
                                     data, offset, estimated);
     if (!enc_status.ok()) return enc_status;
@@ -190,6 +193,7 @@ Status SegmentWriter::write_to_file(const std::string& path) noexcept {
     
     // Column 3: instrument_id
     descriptors[3].offset = offset;
+    descriptors[3].encoding = vts1::EncodingType::BitPacked;
     enc_status = encode_column_u32(instrument_ids_, vts1::EncodingType::BitPacked,
                                     data, offset, estimated);
     if (!enc_status.ok()) return enc_status;
@@ -200,6 +204,7 @@ Status SegmentWriter::write_to_file(const std::string& path) noexcept {
     
     // Column 4: event_type
     descriptors[4].offset = offset;
+    descriptors[4].encoding = vts1::EncodingType::RLE;
     enc_status = encode_column_u8(event_types_, vts1::EncodingType::RLE,
                                    data, offset, estimated);
     if (!enc_status.ok()) return enc_status;
@@ -208,6 +213,7 @@ Status SegmentWriter::write_to_file(const std::string& path) noexcept {
     
     // Column 5: side
     descriptors[5].offset = offset;
+    descriptors[5].encoding = vts1::EncodingType::RLE;
     enc_status = encode_column_u8(sides_, vts1::EncodingType::RLE,
                                    data, offset, estimated);
     if (!enc_status.ok()) return enc_status;
@@ -216,6 +222,7 @@ Status SegmentWriter::write_to_file(const std::string& path) noexcept {
     
     // Column 6: flags
     descriptors[6].offset = offset;
+    descriptors[6].encoding = vts1::EncodingType::BitPacked;
     enc_status = encode_column_u16(flags_, vts1::EncodingType::BitPacked,
                                     data, offset, estimated);
     if (!enc_status.ok()) return enc_status;
@@ -224,6 +231,7 @@ Status SegmentWriter::write_to_file(const std::string& path) noexcept {
     
     // Column 7: price_ticks
     descriptors[7].offset = offset;
+    descriptors[7].encoding = vts1::EncodingType::Delta;
     enc_status = encode_column_i64(price_ticks_, vts1::EncodingType::Delta,
                                     data, offset, estimated);
     if (!enc_status.ok()) return enc_status;
@@ -234,6 +242,7 @@ Status SegmentWriter::write_to_file(const std::string& path) noexcept {
     
     // Column 8: quantity
     descriptors[8].offset = offset;
+    descriptors[8].encoding = vts1::EncodingType::BitPacked;
     enc_status = encode_column_u32(quantities_, vts1::EncodingType::BitPacked,
                                     data, offset, estimated);
     if (!enc_status.ok()) return enc_status;
@@ -244,7 +253,8 @@ Status SegmentWriter::write_to_file(const std::string& path) noexcept {
     
     // Column 9: venue_id
     descriptors[9].offset = offset;
-    enc_status = encode_column_u16(venue_ids_, vts1::EncodingType::Dictionary,
+    descriptors[9].encoding = vts1::EncodingType::Raw;
+    enc_status = encode_column_u16(venue_ids_, vts1::EncodingType::Raw,
                                     data, offset, estimated);
     if (!enc_status.ok()) return enc_status;
     descriptors[9].compressed_size = offset - descriptors[9].offset;
@@ -252,7 +262,8 @@ Status SegmentWriter::write_to_file(const std::string& path) noexcept {
     
     // Column 10: source_id
     descriptors[10].offset = offset;
-    enc_status = encode_column_u16(source_ids_, vts1::EncodingType::Dictionary,
+    descriptors[10].encoding = vts1::EncodingType::Raw;
+    enc_status = encode_column_u16(source_ids_, vts1::EncodingType::Raw,
                                     data, offset, estimated);
     if (!enc_status.ok()) return enc_status;
     descriptors[10].compressed_size = offset - descriptors[10].offset;
@@ -260,6 +271,7 @@ Status SegmentWriter::write_to_file(const std::string& path) noexcept {
     
     // Column 11: trade_or_order_id
     descriptors[11].offset = offset;
+    descriptors[11].encoding = vts1::EncodingType::Raw;
     enc_status = encode_column_u64(trade_or_order_ids_, vts1::EncodingType::Raw,
                                     data, offset, estimated);
     if (!enc_status.ok()) return enc_status;
@@ -322,16 +334,23 @@ Status SegmentWriter::write_to_file(const std::string& path) noexcept {
     footer.min_sequence = min_sequence_;
     footer.max_sequence = max_sequence_;
     
-    // Compute CRCs for descriptors
+    // Compute CRCs for descriptors and overall segment digest
+    u64 segment_digest = 0;
     for (auto& desc : descriptors) {
         desc.data_crc = Crc32C::compute(data + desc.offset, desc.compressed_size);
         desc.descriptor_crc = Crc32C::compute(reinterpret_cast<byte*>(&desc), 
                                               vts1::ColumnDescriptor::Size - sizeof(u32));
+        segment_digest = hash_combine(segment_digest, desc.data_crc);
     }
     
     // Write descriptors back
     std::memcpy(data + header.descriptor_offset, descriptors.data(), 
                 descriptors.size() * vts1::ColumnDescriptor::Size);
+    
+    // Fill in footer hashes
+    footer.descriptor_table_hash = Crc32C::compute(data + header.descriptor_offset,
+                                                   descriptors.size() * vts1::ColumnDescriptor::Size);
+    footer.segment_digest = segment_digest;
     
     // Compute header CRC
     header.header_crc = 0;
@@ -535,6 +554,16 @@ Status SegmentWriter::encode_column_u16(const std::vector<u16>& values,
                                          usize& offset,
                                          usize output_size) noexcept {
     if (values.empty()) return Status::OK();
+    
+    if (encoding == vts1::EncodingType::Raw) {
+        usize bytes = values.size() * sizeof(u16);
+        if (offset + bytes > output_size) {
+            return Status(StatusCode::BufferTooSmall, "Buffer too small for u16 raw column");
+        }
+        std::memcpy(output + offset, values.data(), bytes);
+        offset += bytes;
+        return Status::OK();
+    }
     
     // Convert to u32 and use u32 encoding
     std::vector<u32> values32(values.begin(), values.end());

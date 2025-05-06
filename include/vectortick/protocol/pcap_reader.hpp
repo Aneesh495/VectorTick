@@ -86,7 +86,8 @@ struct IPv4Header {
     [[nodiscard]] u8 ihl() const noexcept { return (version_ihl & 0x0F) * 4; }
     [[nodiscard]] u8 version() const noexcept { return (version_ihl >> 4) & 0x0F; }
     [[nodiscard]] bool is_fragmented() const noexcept { 
-        return (flags_fragment & FlagMF) != 0 || (flags_fragment & FragmentMask) != 0;
+        u16 ff = read_be_u16(reinterpret_cast<const byte*>(&flags_fragment));
+        return (ff & FlagMF) != 0 || (ff & FragmentMask) != 0;
     }
 };
 

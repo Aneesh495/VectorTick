@@ -81,18 +81,24 @@ file(GLOB_RECURSE VT_STORAGE_SOURCES src/storage/*.cpp)
 file(GLOB_RECURSE VT_QUERY_SOURCES src/query/*.cpp)
 file(GLOB_RECURSE VT_IR_SOURCES src/ir/*.cpp)
 file(GLOB_RECURSE VT_EXECUTION_SOURCES src/execution/*.cpp)
-file(GLOB_RECURSE VT_JIT_SOURCES src/jit/*.cpp)
-file(GLOB_RECURSE VT_JIT_X64_SOURCES src/jit/x64/*.cpp)
-file(GLOB_RECURSE VT_JIT_A64_SOURCES src/jit/a64/*.cpp)
+file(GLOB VT_JIT_SOURCES src/jit/*.cpp)
 file(GLOB_RECURSE VT_REPLAY_SOURCES src/replay/*.cpp)
 file(GLOB_RECURSE VT_METRICS_SOURCES src/metrics/*.cpp)
 
-# Assembly sources
+# Architecture-specific JIT sources
+set(VT_JIT_ARCH_SOURCES)
 if(VT_ARCH_X86_64)
-    file(GLOB VT_ASM_X86_64_SOURCES asm/x86_64/*.S)
+    file(GLOB_RECURSE VT_JIT_ARCH_SOURCES src/jit/x64/*.cpp)
+elseif(VT_ARCH_AARCH64)
+    file(GLOB_RECURSE VT_JIT_ARCH_SOURCES src/jit/a64/*.cpp)
 endif()
-if(VT_ARCH_AARCH64)
-    file(GLOB VT_ASM_AARCH64_SOURCES asm/aarch64/*.S)
+
+# Assembly sources
+set(VT_ASM_SOURCES)
+if(VT_ARCH_X86_64)
+    file(GLOB VT_ASM_SOURCES asm/x86_64/*.S)
+elseif(VT_ARCH_AARCH64)
+    file(GLOB VT_ASM_SOURCES asm/aarch64/*.S)
 endif()
 
 # Main library
@@ -108,12 +114,10 @@ add_library(vectortick STATIC
     ${VT_IR_SOURCES}
     ${VT_EXECUTION_SOURCES}
     ${VT_JIT_SOURCES}
-    ${VT_JIT_X64_SOURCES}
-    ${VT_JIT_A64_SOURCES}
+    ${VT_JIT_ARCH_SOURCES}
     ${VT_REPLAY_SOURCES}
     ${VT_METRICS_SOURCES}
-    ${VT_ASM_X86_64_SOURCES}
-    ${VT_ASM_AARCH64_SOURCES}
+    ${VT_ASM_SOURCES}
 )
 
 target_include_directories(vectortick
@@ -123,6 +127,8 @@ target_include_directories(vectortick
 )
 
 target_compile_features(vectortick PUBLIC cxx_std_20)
+set_warning_flags(vectortick)
+set_sanitizer_flags(vectortick)
 
 # Link libraries
 find_package(Threads REQUIRED)
@@ -135,21 +141,19 @@ elseif(UNIX)
     target_link_libraries(vectortick PRIVATE dl rt)
 endif()
 
-# Applications
-add_executable(vectortick_ingest apps/vectortick_ingest.cpp)
-target_link_libraries(vectortick_ingest PRIVATE vectortick)
+# Applications helper
+function(add_vt_executable name source)
+    add_executable(${name} ${source})
+    target_link_libraries(${name} PRIVATE vectortick)
+    set_warning_flags(${name})
+    set_sanitizer_flags(${name})
+endfunction()
 
-add_executable(vectortick_query apps/vectortick_query.cpp)
-target_link_libraries(vectortick_query PRIVATE vectortick)
-
-add_executable(vectortick_replay apps/vectortick_replay.cpp)
-target_link_libraries(vectortick_replay PRIVATE vectortick)
-
-add_executable(vectortick_inspect apps/vectortick_inspect.cpp)
-target_link_libraries(vectortick_inspect PRIVATE vectortick)
-
-add_executable(vectortick_demo apps/vectortick_demo.cpp)
-target_link_libraries(vectortick_demo PRIVATE vectortick)
+add_vt_executable(vectortick_ingest apps/vectortick_ingest.cpp)
+add_vt_executable(vectortick_query apps/vectortick_query.cpp)
+add_vt_executable(vectortick_replay apps/vectortick_replay.cpp)
+add_vt_executable(vectortick_inspect apps/vectortick_inspect.cpp)
+add_vt_executable(vectortick_demo apps/vectortick_demo.cpp)
 
 # Tests
 enable_testing()
@@ -157,12 +161,40 @@ enable_testing()
 file(GLOB_RECURSE VT_TEST_SOURCES tests/*.cpp)
 add_executable(vectortick_tests ${VT_TEST_SOURCES})
 target_link_libraries(vectortick_tests PRIVATE vectortick)
-add_test(NAME VectorTickTests COMMAND vectortick_tests)
+target_include_directories(vectortick_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+set_warning_flags(vectortick_tests)
+set_sanitizer_flags(vectortick_tests)
+
+set(VT_TEST_SUITES
+    types_tests
+    checked_arithmetic_tests
+    protocol_tests
+    pcap_tests
+    storage_tests
+    query_lexer_tests
+    query_parser_tests
+    query_typecheck_tests
+    ir_tests
+    reference_executor_tests
+    vector_executor_tests
+    x86_encoder_tests
+    aarch64_encoder_tests
+    jit_differential_tests
+    recovery_tests
+    cli_integration_tests
+)
+
+foreach(SUITE ${VT_TEST_SUITES})
+    add_test(NAME ${SUITE} COMMAND vectortick_tests --suite=${SUITE})
+endforeach()
+add_test(NAME all_tests COMMAND vectortick_tests)
 
 # Benchmarks
 file(GLOB_RECURSE VT_BENCH_SOURCES bench/*.cpp)
 add_executable(vectortick_bench ${VT_BENCH_SOURCES})
 target_link_libraries(vectortick_bench PRIVATE vectortick)
+set_warning_flags(vectortick_bench)
+set_sanitizer_flags(vectortick_bench)
 
 # Fuzz targets (only with Clang)
 if(VT_COMPILER_CLANG OR VT_COMPILER_APPLECLANG)

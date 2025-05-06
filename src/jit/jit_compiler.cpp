@@ -70,7 +70,7 @@ Status JitMemory::make_executable() noexcept {
 
 Status JitMemory::protect(int prot) noexcept {
     if (mprotect(memory_, size_, prot) != 0) {
-        return Status(StatusCode::PermissionDenied, "mprotect failed");
+        return Status(StatusCode::MprotectFailed, "mprotect failed");
     }
     executable_ = (prot & PROT_EXEC) != 0;
     return Status::OK();
@@ -237,7 +237,7 @@ Status JitCompiler::compile_instruction(const ir::Instruction* instr) noexcept {
             break;
         }
         
-        case Opcode::Xor: {
+        case Opcode::BitXor: {
             X86Reg lhs = get_location(instr->operand(0));
             X86Reg rhs = get_location(instr->operand(1));
             X86Reg dst = allocate_register();

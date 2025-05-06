@@ -41,6 +41,9 @@ public:
     // Read event at row index
     [[nodiscard]] Status read_event(usize row_idx, CanonicalEvent& event) const noexcept;
     
+    // Read all events in segment
+    [[nodiscard]] Status read_all_events(std::vector<CanonicalEvent>& events) const noexcept;
+    
     // Read column data
     [[nodiscard]] Status read_column_u64(vts1::ColumnID col, u64* values, usize num_values) const noexcept;
     [[nodiscard]] Status read_column_u32(vts1::ColumnID col, u32* values, usize num_values) const noexcept;

@@ -99,8 +99,20 @@ struct Statement {
     virtual ~Statement() = default;
 };
 
+// Select projection item
+struct SelectItem {
+    std::unique_ptr<Expression> expr;
+    std::string alias;
+    bool is_wildcard = false;
+    
+    SelectItem() = default;
+    SelectItem(std::unique_ptr<Expression> e, std::string a = "", bool wildcard = false)
+        : expr(std::move(e)), alias(std::move(a)), is_wildcard(wildcard) {}
+};
+
 // Complete query
 struct QueryStmt : Statement {
+    std::vector<SelectItem> projections;                   // SELECT projections
     std::string table_name;                                 // FROM table
     std::unique_ptr<Expression> where_expr;                // WHERE condition
     std::vector<std::pair<std::string, std::unique_ptr<Expression>>> let_bindings; // LET clauses

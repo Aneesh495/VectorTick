@@ -20,7 +20,7 @@ struct QuotePayload {
     i64 ask_price_ticks;
     u32 ask_quantity;
     
-    static constexpr usize Size = 32;
+    static constexpr usize Size = 40;
     
     void read_from(const byte* buffer) noexcept {
         exchange_ts_ns = read_be_u64(buffer);

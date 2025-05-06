@@ -106,15 +106,21 @@ Status Decoder::decode_quote(const byte* payload, u32 len, CanonicalEvent& event
     event.exchange_ts_ns = quote.exchange_ts_ns;
     event.instrument_id = quote.instrument_id;
     event.event_type = EventType::Quote;
-    event.side = static_cast<Side>(quote.side);
     event.flags = 0;
-    // Quote has both bid and ask - we'll create two events if needed
-    // For now, use bid price
-    event.price_ticks = quote.bid_price_ticks;
-    event.quantity = quote.bid_quantity;
     event.venue_id = 0;
     event.source_id = 0;
     event.trade_or_order_id = 0;
+    
+    Side s = static_cast<Side>(quote.side);
+    if (s == Side::Ask) {
+        event.side = Side::Ask;
+        event.price_ticks = quote.ask_price_ticks;
+        event.quantity = quote.ask_quantity;
+    } else {
+        event.side = Side::Bid;
+        event.price_ticks = quote.bid_price_ticks;
+        event.quantity = quote.bid_quantity;
+    }
     
     return event::validate(event);
 }
@@ -258,10 +264,17 @@ Result<usize> Encoder::encode_event(const CanonicalEvent& event,
             quote.instrument_id = event.instrument_id;
             quote.side = static_cast<u8>(event.side);
             quote.reserved[0] = quote.reserved[1] = quote.reserved[2] = 0;
-            quote.bid_price_ticks = event.price_ticks;
-            quote.bid_quantity = event.quantity;
-            quote.ask_price_ticks = 0;
-            quote.ask_quantity = 0;
+            if (event.side == Side::Ask) {
+                quote.bid_price_ticks = 0;
+                quote.bid_quantity = 0;
+                quote.ask_price_ticks = event.price_ticks;
+                quote.ask_quantity = event.quantity;
+            } else {
+                quote.bid_price_ticks = event.price_ticks;
+                quote.bid_quantity = event.quantity;
+                quote.ask_price_ticks = 0;
+                quote.ask_quantity = 0;
+            }
             quote.write_to(payload);
             break;
         }

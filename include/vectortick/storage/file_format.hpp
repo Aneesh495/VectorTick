@@ -37,7 +37,7 @@ struct SegmentHeader {
     u32 bloom_filter_offset;// Offset to bloom filter
     u32 bloom_filter_size;  // Size of bloom filter
     u32 footer_offset;      // Offset to footer
-    u32 reserved[8];        // Reserved for future use
+    u32 reserved[13];       // Reserved for future use (52 bytes)
     u32 header_crc;         // CRC32C of header (with this field = 0)
     
     static constexpr usize Size = 128;
@@ -45,6 +45,7 @@ struct SegmentHeader {
     [[nodiscard]] bool is_valid_magic() const noexcept { return magic == Magic::VTS1; }
     [[nodiscard]] bool is_valid_version() const noexcept { return version == Version::VTS1; }
 };
+static_assert(sizeof(SegmentHeader) == SegmentHeader::Size, "SegmentHeader must be 128 bytes");
 
 // Column types
 enum class ColumnType : u8 {
@@ -72,22 +73,24 @@ enum class EncodingType : u8 {
 
 // Column descriptor (64 bytes)
 struct ColumnDescriptor {
-    u32 column_id;          // Column index
-    ColumnType type;        // Data type
-    EncodingType encoding;  // Encoding used
-    u8 bits_per_value;      // For bit-packed encoding
-    u8 reserved[5];
-    u64 offset;             // Offset to column data
-    u64 compressed_size;    // Compressed size in bytes
-    u64 uncompressed_size;  // Uncompressed size in bytes (logical)
-    u64 min_value;          // Minimum value (as u64)
-    u64 max_value;          // Maximum value (as u64)
-    u32 null_count;         // Number of nulls (always 0 for now)
-    u32 data_crc;           // CRC32C of column data
-    u32 descriptor_crc;     // CRC32C of descriptor (with this field = 0)
+    u32 column_id;          // Column index (4)
+    ColumnType type;        // Data type (1)
+    EncodingType encoding;  // Encoding used (1)
+    u8 bits_per_value;      // For bit-packed encoding (1)
+    u8 reserved1;           // Alignment byte (1)
+    u64 offset;             // Offset to column data (8)
+    u64 compressed_size;    // Compressed size in bytes (8)
+    u64 uncompressed_size;  // Uncompressed size in bytes (logical) (8)
+    u64 min_value;          // Minimum value (as u64) (8)
+    u64 max_value;          // Maximum value (as u64) (8)
+    u32 null_count;         // Number of nulls (4)
+    u32 data_crc;           // CRC32C of column data (4)
+    u32 reserved2;          // Reserved for future use (4)
+    u32 descriptor_crc;     // CRC32C of descriptor (with this field = 0) (4)
     
     static constexpr usize Size = 64;
 };
+static_assert(sizeof(ColumnDescriptor) == ColumnDescriptor::Size, "ColumnDescriptor must be 64 bytes");
 
 // Zone map for a column (64 bytes)
 struct ZoneMap {
@@ -98,10 +101,11 @@ struct ZoneMap {
     u32 null_count;
     u32 first_row_idx;  // Index of first row in zone
     u32 last_row_idx;   // Index of last row in zone
-    u32 reserved[4];
+    u32 reserved[6];    // 24 bytes
     
     static constexpr usize Size = 64;
 };
+static_assert(sizeof(ZoneMap) == ZoneMap::Size, "ZoneMap must be 64 bytes");
 
 // Segment footer (128 bytes)
 struct SegmentFooter {
@@ -116,12 +120,13 @@ struct SegmentFooter {
     u64 max_sequence;           // Max sequence number
     u32 row_count;              // Number of rows
     u32 column_count;           // Number of columns
-    u32 reserved[6];
+    u32 reserved[13];           // 52 bytes
     u32 footer_crc;             // CRC32C of footer (with this field = 0)
     
     static constexpr usize Size = 128;
     static constexpr u64 CommittedMarker = 0xDEADBEEFCAFEBABEULL;
 };
+static_assert(sizeof(SegmentFooter) == SegmentFooter::Size, "SegmentFooter must be 128 bytes");
 
 // Bloom filter parameters
 struct BloomFilterParams {
@@ -204,6 +209,20 @@ enum ColumnID : u32 {
         case TradeOrOrderId: return "trade_or_order_id";
         default: return "unknown";
     }
+}
+
+// Compute deterministic non-zero schema hash for canonical 12 columns
+[[nodiscard]] inline u64 compute_canonical_schema_hash() noexcept {
+    FnvHash hasher;
+    for (u32 i = 0; i < ColumnCount; ++i) {
+        auto col_id = static_cast<ColumnID>(i);
+        const char* name = get_column_name(col_id);
+        auto type = static_cast<u8>(get_column_type(col_id));
+        hasher.update(reinterpret_cast<const u8*>(&i), sizeof(i));
+        hasher.update(reinterpret_cast<const u8*>(name), std::strlen(name));
+        hasher.update(&type, sizeof(type));
+    }
+    return hasher.get();
 }
 
 } // namespace vts1

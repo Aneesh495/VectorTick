@@ -125,22 +125,11 @@ private:
     void set_reg(u32 value_id, A64Reg reg) noexcept;
 };
 
-// Create appropriate code generator for host
-[[nodiscard]] inline std::unique_ptr<CodeGenerator> create_generator(TargetArch arch) {
-    switch (arch) {
-        case TargetArch::X86_64:
-            return std::make_unique<X86CodeGenerator>();
-        case TargetArch::AArch64:
-            return std::make_unique<A64CodeGenerator>();
-        default:
-            return nullptr;
-    }
-}
+// Create appropriate code generator for target
+[[nodiscard]] std::unique_ptr<CodeGenerator> create_generator(TargetArch arch);
 
 // Create code generator for current host
-[[nodiscard]] inline std::unique_ptr<CodeGenerator> create_host_generator() {
-    return create_generator(detect_host_arch());
-}
+[[nodiscard]] std::unique_ptr<CodeGenerator> create_host_generator();
 
 } // namespace jit
 

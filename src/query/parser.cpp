@@ -29,21 +29,81 @@ Result<std::unique_ptr<QueryStmt>> Parser::parse_query() noexcept {
     Token tok = current_token();
     auto query = std::make_unique<QueryStmt>(tok.line, tok.column);
     
-    // FROM clause (required)
-    if (!match(TokenType::From)) {
-        set_error("Expected FROM", tok.line, tok.column);
+    // Support either starting with SELECT or starting with FROM
+    if (match(TokenType::Select)) {
+        // Parse projection list
+        do {
+            if (match(TokenType::Star)) {
+                query->projections.emplace_back(nullptr, "*", true);
+            } else {
+                auto expr = parse_expression();
+                if (!expr || has_error_) break;
+                
+                std::string alias;
+                if (match(TokenType::As)) {
+                    Token a = expect(TokenType::Identifier, "Expected alias after AS");
+                    if (has_error_) break;
+                    alias = std::string(a.text);
+                } else if (check(TokenType::Identifier) && 
+                           current_token().type != TokenType::From &&
+                           current_token().type != TokenType::Where &&
+                           current_token().type != TokenType::Group &&
+                           current_token().type != TokenType::Order &&
+                           current_token().type != TokenType::Limit) {
+                    alias = std::string(advance().text);
+                }
+                
+                query->projections.emplace_back(std::move(expr), alias, false);
+            }
+        } while (match(TokenType::Comma) && !has_error_);
+        
+        if (has_error_) {
+            return make_error<std::unique_ptr<QueryStmt>>(StatusCode::ParserError, error_msg_);
+        }
+        
+        // Optional FROM clause
+        if (match(TokenType::From)) {
+            Token table = expect(TokenType::Identifier, "Expected table name");
+            if (has_error_) {
+                return make_error<std::unique_ptr<QueryStmt>>(StatusCode::ParserError, error_msg_);
+            }
+            query->table_name = std::string(table.text);
+        } else {
+            query->table_name = "events";
+        }
+    } else if (match(TokenType::From)) {
+        Token table = expect(TokenType::Identifier, "Expected table name");
+        if (has_error_) {
+            return make_error<std::unique_ptr<QueryStmt>>(StatusCode::ParserError, error_msg_);
+        }
+        query->table_name = std::string(table.text);
+    } else {
+        set_error("Expected SELECT or FROM", tok.line, tok.column);
         return make_error<std::unique_ptr<QueryStmt>>(StatusCode::ParserError, error_msg_);
     }
-    
-    Token table = expect(TokenType::Identifier, "Expected table name");
-    if (has_error_) {
-        return make_error<std::unique_ptr<QueryStmt>>(StatusCode::ParserError, error_msg_);
-    }
-    query->table_name = table.text;
     
     // Optional clauses
     while (!check(TokenType::Eof) && !has_error_) {
-        if (check(TokenType::Where)) {
+        if (check(TokenType::Select)) {
+            advance();
+            do {
+                if (match(TokenType::Star)) {
+                    query->projections.emplace_back(nullptr, "*", true);
+                } else {
+                    auto expr = parse_expression();
+                    if (!expr || has_error_) break;
+                    
+                    std::string alias;
+                    if (match(TokenType::As)) {
+                        Token a = expect(TokenType::Identifier, "Expected alias after AS");
+                        if (has_error_) break;
+                        alias = std::string(a.text);
+                    }
+                    query->projections.emplace_back(std::move(expr), alias, false);
+                }
+            } while (match(TokenType::Comma) && !has_error_);
+        }
+        else if (check(TokenType::Where)) {
             advance();
             query->where_expr = parse_expression();
             if (has_error_) break;
@@ -98,8 +158,14 @@ Result<std::unique_ptr<QueryStmt>> Parser::parse_query() noexcept {
             
             // Parse aggregations
             do {
-                Token name = expect(TokenType::Identifier, "Expected aggregation function");
-                if (has_error_) break;
+                Token name;
+                if (check(TokenType::Identifier) || check(TokenType::Count) || check(TokenType::Sum) ||
+                    check(TokenType::Min) || check(TokenType::Max) || check(TokenType::Avg)) {
+                    name = advance();
+                } else {
+                    set_error("Expected aggregation function", current_token().line, current_token().column);
+                    break;
+                }
                 
                 if (!match(TokenType::LParen)) {
                     set_error("Expected '(' after aggregation function", current_token().line, current_token().column);
@@ -110,7 +176,9 @@ Result<std::unique_ptr<QueryStmt>> Parser::parse_query() noexcept {
                 std::string agg_name(name.text);
                 std::unique_ptr<Expression> arg;
                 
-                if (!check(TokenType::RParen)) {
+                if (match(TokenType::Star)) {
+                    // Wildcard count(*)
+                } else if (!check(TokenType::RParen)) {
                     arg = parse_expression();
                     if (has_error_) break;
                 }
@@ -143,12 +211,16 @@ Result<std::unique_ptr<QueryStmt>> Parser::parse_query() noexcept {
                 if (has_error_) break;
                 
                 bool ascending = true;
-                if (check(TokenType::Identifier)) {
+                if (match(TokenType::Asc)) {
+                    ascending = true;
+                } else if (match(TokenType::Desc)) {
+                    ascending = false;
+                } else if (check(TokenType::Identifier)) {
                     Token dir = current_token();
-                    if (dir.text == "ASC") {
+                    if (dir.text == "ASC" || dir.text == "asc") {
                         advance();
                         ascending = true;
-                    } else if (dir.text == "DESC") {
+                    } else if (dir.text == "DESC" || dir.text == "desc") {
                         advance();
                         ascending = false;
                     }
@@ -363,6 +435,16 @@ std::unique_ptr<Expression> Parser::parse_primary_expr() noexcept {
         return expr;
     }
     
+    // Keywords used as function calls or identifiers (count, sum, min, max, avg)
+    if (check(TokenType::Count) || check(TokenType::Sum) || check(TokenType::Min) ||
+        check(TokenType::Max) || check(TokenType::Avg)) {
+        Token name = advance();
+        if (check(TokenType::LParen)) {
+            return parse_function_call(std::string(name.text), name.line, name.column);
+        }
+        return std::make_unique<ColumnRefExpr>(std::string(name.text), name.line, name.column);
+    }
+    
     // Identifier (column ref or function call)
     if (check(TokenType::Identifier)) {
         Token name = advance();
@@ -385,8 +467,10 @@ std::unique_ptr<Expression> Parser::parse_function_call(const std::string& name,
     
     auto call = std::make_unique<FunctionCallExpr>(name, line, col);
     
-    // Parse arguments
-    if (!check(TokenType::RParen)) {
+    // Parse arguments (or empty / star for count(*))
+    if (match(TokenType::Star)) {
+        // count(*)
+    } else if (!check(TokenType::RParen)) {
         do {
             auto arg = parse_expression();
             if (!arg || has_error_) return nullptr;

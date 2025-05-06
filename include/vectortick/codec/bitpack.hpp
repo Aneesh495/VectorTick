@@ -47,37 +47,20 @@ public:
         if (bits == 0 || bits > 32) return 0;
         
         std::memset(output, 0, required);
+        u32 mask = (bits == 32) ? 0xFFFFFFFFU : ((1U << bits) - 1);
         
         u64 bit_offset = 0;
         for (usize i = 0; i < num_values; ++i) {
-            // Write value at bit_offset
+            u64 val = static_cast<u64>(values[i] & mask);
             u64 byte_offset = bit_offset / 8;
             u32 bit_pos = static_cast<u32>(bit_offset % 8);
             
-            u32 value = values[i];
-            
-            // Write across byte boundaries
-            if (bit_pos + bits <= 32) {
-                // Can write in one or two operations
-                u32 available_in_current_byte = 8 - bit_pos;
-                
-                if (bits <= available_in_current_byte) {
-                    // Fits in current byte
-                    output[byte_offset] |= static_cast<byte>((value & ((1U << bits) - 1)) << bit_pos);
-                } else {
-                    // Spans multiple bytes
-                    u32 low_bits = available_in_current_byte;
-                    u32 high_bits = bits - low_bits;
-                    
-                    output[byte_offset] |= static_cast<byte>((value & ((1U << low_bits) - 1)) << bit_pos);
-                    
-                    // Write remaining bits
-                    u32 remaining = value >> low_bits;
-                    u32 bytes_needed = (high_bits + 7) / 8;
-                    
-                    for (u32 j = 0; j < bytes_needed && (byte_offset + 1 + j) < required; ++j) {
-                        output[byte_offset + 1 + j] |= static_cast<byte>(remaining >> (j * 8));
-                    }
+            u64 shifted = val << bit_pos;
+            u32 total_bits = bit_pos + bits;
+            u32 bytes_to_write = (total_bits + 7) / 8;
+            for (u32 b = 0; b < bytes_to_write; ++b) {
+                if (byte_offset + b < required) {
+                    output[byte_offset + b] |= static_cast<byte>((shifted >> (b * 8)) & 0xFF);
                 }
             }
             
@@ -100,25 +83,18 @@ public:
         if (bits == 0 || bits > 32) return 0;
         
         u64 bit_offset = 0;
-        u32 mask = bits == 32 ? 0xFFFFFFFF : ((1U << bits) - 1);
+        u32 mask = (bits == 32) ? 0xFFFFFFFFU : ((1U << bits) - 1);
         
         for (usize i = 0; i < num_values; ++i) {
             u64 byte_offset = bit_offset / 8;
             u32 bit_pos = static_cast<u32>(bit_offset % 8);
             
-            // Read across byte boundaries
-            if (bit_pos + bits <= 32 && byte_offset + 4 <= input_size) {
-                // Read 4 bytes and extract
-                u32 window = 0;
-                for (u32 j = 0; j < 4 && (byte_offset + j) < input_size; ++j) {
-                    window |= static_cast<u32>(input[byte_offset + j]) << (j * 8);
-                }
-                
-                values[i] = (window >> bit_pos) & mask;
-            } else {
-                values[i] = 0;
+            u64 window = 0;
+            for (u32 j = 0; j < 8 && (byte_offset + j) < input_size; ++j) {
+                window |= static_cast<u64>(input[byte_offset + j]) << (j * 8);
             }
             
+            values[i] = static_cast<u32>((window >> bit_pos) & mask);
             bit_offset += bits;
         }
         

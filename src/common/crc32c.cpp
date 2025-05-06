@@ -160,34 +160,33 @@ u32 Crc32C::compute_arm(u32 init_crc, const byte* data, usize length) noexcept {
 
 // Main compute function (dispatches to best implementation)
 u32 Crc32C::compute(u32 init_crc, const byte* data, usize length) noexcept {
-    // Use hardware if available
-    if (is_hw_supported()) {
-        return compute_hw(data, length);
+    if (data == nullptr || length == 0) {
+        return init_crc;
     }
     
-    // Fallback to software
-    return compute_sw(init_crc, data, length);
+    u32 acc = init_crc ^ 0xFFFFFFFF;
+#if defined(__x86_64__) || defined(_M_X64)
+    if (is_hw_supported()) {
+        acc = compute_sse42(acc, data, length);
+        return acc ^ 0xFFFFFFFF;
+    }
+#elif defined(__aarch64__) || defined(_M_ARM64)
+    if (is_hw_supported()) {
+        acc = compute_arm(acc, data, length);
+        return acc ^ 0xFFFFFFFF;
+    }
+#endif
+
+    acc = compute_sw(acc, data, length);
+    return acc ^ 0xFFFFFFFF;
 }
 
 u32 Crc32C::compute(const byte* data, usize length) noexcept {
-    constexpr u32 init_crc = 0xFFFFFFFF;
-    return compute(init_crc, data, length) ^ 0xFFFFFFFF;
+    return compute(0, data, length);
 }
 
 u32 Crc32C::compute_hw(const byte* data, usize length) noexcept {
-#if defined(__x86_64__) || defined(_M_X64)
-    if (is_hw_supported()) {
-        constexpr u32 init_crc = 0;
-        u32 crc = compute_sse42(init_crc, data, length);
-        return crc ^ 0xFFFFFFFF;
-    }
-#elif defined(__aarch64__) || defined(_M_ARM64)
-    constexpr u32 init_crc = 0;
-    u32 crc = compute_arm(init_crc, data, length);
-    return crc ^ 0xFFFFFFFF;
-#endif
-    
-    return compute_sw(0xFFFFFFFF, data, length);
+    return compute(0, data, length);
 }
 
 // Combine two CRC values
