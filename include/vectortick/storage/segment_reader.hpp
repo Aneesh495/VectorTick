@@ -64,6 +64,19 @@ public:
     // Get compression ratio
     [[nodiscard]] double compression_ratio() const noexcept;
 
+    // Metadata accessors
+    [[nodiscard]] u32 schema_hash() const noexcept { return header_.schema_hash; }
+    [[nodiscard]] const vts1::SegmentHeader& header() const noexcept { return header_; }
+    [[nodiscard]] const std::vector<vts1::ColumnDescriptor>& descriptors() const noexcept { return descriptors_; }
+    [[nodiscard]] const std::vector<vts1::ZoneMap>& zone_maps() const noexcept { return zone_maps_; }
+    [[nodiscard]] const std::vector<u8>& bloom_filter() const noexcept { return bloom_filter_; }
+    [[nodiscard]] u64 min_sequence() const noexcept {
+        return column_min(vts1::ColumnID::Sequence);
+    }
+    [[nodiscard]] u64 max_sequence() const noexcept {
+        return column_max(vts1::ColumnID::Sequence);
+    }
+
 private:
     [[nodiscard]] Status read_header() noexcept;
     [[nodiscard]] Status read_descriptors() noexcept;
