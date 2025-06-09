@@ -1,6 +1,13 @@
 #include "vectortick/jit/jit_compiler.hpp"
+#include "vectortick/jit/code_generator.hpp"
+
 #include <cstring>
 #include <sys/mman.h>
+
+#if defined(__APPLE__)
+#include <pthread.h>
+#include <libkern/OSCacheControl.h>
+#endif
 
 namespace vectortick {
 namespace jit {
@@ -27,10 +34,17 @@ Status JitMemory::allocate(usize size) noexcept {
     usize page_size = 4096;
     usize alloc_size = ((size + page_size - 1) / page_size) * page_size;
     
-    // Allocate memory with read/write/execute permissions
+#if defined(__APPLE__) && defined(__aarch64__)
+    // Apple Silicon MAP_JIT requirement
     void* mem = mmap(nullptr, alloc_size, 
                      PROT_READ | PROT_WRITE | PROT_EXEC,
+                     MAP_PRIVATE | MAP_ANON | MAP_JIT, -1, 0);
+#else
+    // Strict W^X: allocate RW first
+    void* mem = mmap(nullptr, alloc_size, 
+                     PROT_READ | PROT_WRITE,
                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+#endif
     
     if (mem == MAP_FAILED) {
         return Status(StatusCode::AllocationFailed, "mmap failed");
@@ -42,7 +56,7 @@ Status JitMemory::allocate(usize size) noexcept {
     
     memory_ = mem;
     size_ = alloc_size;
-    executable_ = true;  // Already mapped with EXEC
+    executable_ = false;
     
     return Status::OK();
 }
@@ -52,7 +66,17 @@ Status JitMemory::write(const u8* code, usize size) noexcept {
         return Status(StatusCode::InvalidArgument, "Invalid memory or size");
     }
     
+#if defined(__APPLE__) && defined(__aarch64__)
+    pthread_jit_write_protect_np(0); // Allow writes, disable execute
+#endif
+
     std::memcpy(memory_, code, size);
+
+#if defined(__APPLE__) && defined(__aarch64__)
+    pthread_jit_write_protect_np(1); // Disable writes, enable execute
+    sys_icache_invalidate(memory_, size);
+#endif
+
     return Status::OK();
 }
 
@@ -62,16 +86,27 @@ Status JitMemory::make_executable() noexcept {
     }
     
     if (executable_) {
-        return Status::OK();  // Already executable
+        return Status::OK();
     }
     
+#if defined(__APPLE__) && defined(__aarch64__)
+    executable_ = true;
+    return Status::OK();
+#else
     return protect(PROT_READ | PROT_EXEC);
+#endif
 }
 
 Status JitMemory::protect(int prot) noexcept {
+#if !defined(__APPLE__) || !defined(__aarch64__)
     if (mprotect(memory_, size_, prot) != 0) {
         return Status(StatusCode::MprotectFailed, "mprotect failed");
     }
+    __builtin___clear_cache(reinterpret_cast<char*>(memory_),
+                            reinterpret_cast<char*>(memory_) + size_);
+#else
+    (void)prot;
+#endif
     executable_ = (prot & PROT_EXEC) != 0;
     return Status::OK();
 }
@@ -87,213 +122,33 @@ Result<JitFunction> JitCompiler::compile(const ir::Function* function) noexcept 
         return make_error<JitFunction>(StatusCode::InvalidArgument, "Function has no blocks");
     }
     
-    // Reset state
-    assembler_.clear();
-    value_locations_.clear();
-    free_regs_ = {
-        X86Reg::RAX, X86Reg::RCX, X86Reg::RDX, X86Reg::RSI, X86Reg::RDI,
-        X86Reg::R8, X86Reg::R9, X86Reg::R10, X86Reg::R11
-    };
-    
-    // Emit prologue
-    emit_prologue();
-    
-    // Compile each block
-    for (usize i = 0; i < function->num_blocks(); ++i) {
-        const ir::BasicBlock* block = function->block(i);
-        auto status = compile_block(block);
-        if (!status.ok()) {
-            return make_error<JitFunction>(status.code(), status.message());
-        }
+    auto generator = create_host_generator();
+    if (!generator) {
+        return make_error<JitFunction>(StatusCode::NotImplemented, "Host JIT generator not available");
     }
     
-    // Emit epilogue (in case function doesn't return)
-    emit_epilogue();
+    auto code_res = generator->generate(function);
+    if (!code_res.ok()) {
+        return make_error<JitFunction>(code_res.status().code(), code_res.status().message());
+    }
     
-    // Allocate executable memory
-    auto status = memory_.allocate(assembler_.size());
+    const auto& code = code_res.value();
+    auto status = memory_.allocate(code.size());
     if (!status.ok()) {
         return make_error<JitFunction>(status.code(), status.message());
     }
     
-    // Copy code to executable memory
-    status = memory_.write(assembler_.data(), assembler_.size());
+    status = memory_.write(code.data(), code.size());
+    if (!status.ok()) {
+        return make_error<JitFunction>(status.code(), status.message());
+    }
+    
+    status = memory_.make_executable();
     if (!status.ok()) {
         return make_error<JitFunction>(status.code(), status.message());
     }
     
     return memory_.function();
-}
-
-void JitCompiler::emit_prologue() noexcept {
-    // Save callee-saved registers
-    assembler_.push_r64(X86Reg::RBP);
-    assembler_.mov_r64_r64(X86Reg::RBP, X86Reg::RSP);
-    assembler_.push_r64(X86Reg::RBX);
-    assembler_.push_r64(X86Reg::R12);
-    assembler_.push_r64(X86Reg::R13);
-    assembler_.push_r64(X86Reg::R14);
-    assembler_.push_r64(X86Reg::R15);
-    
-    // Align stack to 16 bytes
-    // Note: For simplicity, we assume stack is already aligned
-}
-
-void JitCompiler::emit_epilogue() noexcept {
-    // Restore callee-saved registers
-    assembler_.pop_r64(X86Reg::R15);
-    assembler_.pop_r64(X86Reg::R14);
-    assembler_.pop_r64(X86Reg::R13);
-    assembler_.pop_r64(X86Reg::R12);
-    assembler_.pop_r64(X86Reg::RBX);
-    assembler_.pop_r64(X86Reg::RBP);
-    assembler_.ret();
-}
-
-Status JitCompiler::compile_block(const ir::BasicBlock* block) noexcept {
-    for (usize i = 0; i < block->num_instructions(); ++i) {
-        const ir::Instruction* instr = block->instruction(i);
-        auto status = compile_instruction(instr);
-        if (!status.ok()) {
-            return status;
-        }
-    }
-    
-    return Status::OK();
-}
-
-Status JitCompiler::compile_instruction(const ir::Instruction* instr) noexcept {
-    using namespace ir;
-    
-    switch (instr->opcode()) {
-        case Opcode::Nop:
-            assembler_.nop();
-            break;
-            
-        case Opcode::ConstU64:
-        case Opcode::ConstI64: {
-            auto const_op = static_cast<const ConstOp*>(instr);
-            X86Reg dst = allocate_register();
-            assembler_.mov_r64_imm64(dst, const_op->constant().get_u64());
-            set_location(instr->result(), dst);
-            break;
-        }
-        
-        case Opcode::ConstU32: {
-            auto const_op = static_cast<const ConstOp*>(instr);
-            X86Reg dst = allocate_register();
-            assembler_.mov_r32_imm32(dst, static_cast<u32>(const_op->constant().get_u32()));
-            set_location(instr->result(), dst);
-            break;
-        }
-        
-        case Opcode::AddU64: {
-            X86Reg lhs = get_location(instr->operand(0));
-            X86Reg rhs = get_location(instr->operand(1));
-            X86Reg dst = allocate_register();
-            assembler_.mov_r64_r64(dst, lhs);
-            assembler_.add_r64_r64(dst, rhs);
-            set_location(instr->result(), dst);
-            break;
-        }
-        
-        case Opcode::SubU64: {
-            X86Reg lhs = get_location(instr->operand(0));
-            X86Reg rhs = get_location(instr->operand(1));
-            X86Reg dst = allocate_register();
-            assembler_.mov_r64_r64(dst, lhs);
-            assembler_.sub_r64_r64(dst, rhs);
-            set_location(instr->result(), dst);
-            break;
-        }
-        
-        case Opcode::MulU64: {
-            X86Reg lhs = get_location(instr->operand(0));
-            X86Reg rhs = get_location(instr->operand(1));
-            X86Reg dst = allocate_register();
-            assembler_.mov_r64_r64(dst, lhs);
-            assembler_.imul_r64_r64(dst, rhs);
-            set_location(instr->result(), dst);
-            break;
-        }
-        
-        case Opcode::And: {
-            X86Reg lhs = get_location(instr->operand(0));
-            X86Reg rhs = get_location(instr->operand(1));
-            X86Reg dst = allocate_register();
-            assembler_.mov_r64_r64(dst, lhs);
-            assembler_.and_r64_r64(dst, rhs);
-            set_location(instr->result(), dst);
-            break;
-        }
-        
-        case Opcode::Or: {
-            X86Reg lhs = get_location(instr->operand(0));
-            X86Reg rhs = get_location(instr->operand(1));
-            X86Reg dst = allocate_register();
-            assembler_.mov_r64_r64(dst, lhs);
-            assembler_.or_r64_r64(dst, rhs);
-            set_location(instr->result(), dst);
-            break;
-        }
-        
-        case Opcode::BitXor: {
-            X86Reg lhs = get_location(instr->operand(0));
-            X86Reg rhs = get_location(instr->operand(1));
-            X86Reg dst = allocate_register();
-            assembler_.mov_r64_r64(dst, lhs);
-            assembler_.xor_r64_r64(dst, rhs);
-            set_location(instr->result(), dst);
-            break;
-        }
-        
-        case Opcode::Return: {
-            if (instr->num_operands() > 0) {
-                X86Reg ret_val = get_location(instr->operand(0));
-                if (ret_val != X86Reg::RAX) {
-                    assembler_.mov_r64_r64(X86Reg::RAX, ret_val);
-                }
-            } else {
-                assembler_.xor_r64_r64(X86Reg::RAX, X86Reg::RAX);  // Return 0
-            }
-            emit_epilogue();
-            break;
-        }
-        
-        default:
-            // Unsupported instruction - just skip
-            break;
-    }
-    
-    return Status::OK();
-}
-
-X86Reg JitCompiler::allocate_register() noexcept {
-    if (free_regs_.empty()) {
-        // Spill - for now just use RAX
-        return X86Reg::RAX;
-    }
-    
-    X86Reg reg = free_regs_.back();
-    free_regs_.pop_back();
-    return reg;
-}
-
-void JitCompiler::free_register(X86Reg reg) noexcept {
-    free_regs_.push_back(reg);
-}
-
-X86Reg JitCompiler::get_location(ir::ValueId value) noexcept {
-    auto it = value_locations_.find(value);
-    if (it != value_locations_.end()) {
-        return it->second;
-    }
-    // Return RAX as default
-    return X86Reg::RAX;
-}
-
-void JitCompiler::set_location(ir::ValueId value, X86Reg reg) noexcept {
-    value_locations_[value] = reg;
 }
 
 } // namespace jit

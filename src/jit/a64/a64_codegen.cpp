@@ -1,4 +1,5 @@
 #include "vectortick/jit/code_generator.hpp"
+#include "vectortick/ir/instruction.hpp"
 #include <algorithm>
 #include <cstring>
 
@@ -13,11 +14,12 @@ Result<std::vector<u8>> A64CodeGenerator::generate(const ir::Function* function)
     // Reset state
     assembler_.clear();
     value_to_reg_.clear();
+    // Use X1-X15 for expressions; X0 for return; X19 for context pointer
     free_regs_ = {
-        A64Reg::X0, A64Reg::X1, A64Reg::X2, A64Reg::X3, A64Reg::X4,
+        A64Reg::X1, A64Reg::X2, A64Reg::X3, A64Reg::X4,
         A64Reg::X5, A64Reg::X6, A64Reg::X7, A64Reg::X8, A64Reg::X9,
         A64Reg::X10, A64Reg::X11, A64Reg::X12, A64Reg::X13, A64Reg::X14,
-        A64Reg::X15, A64Reg::X16, A64Reg::X17, A64Reg::X18
+        A64Reg::X15
     };
     
     // Analyze function
@@ -62,6 +64,9 @@ void A64CodeGenerator::emit_prologue() noexcept {
     assembler_.stp_pre(A64Reg::X23, A64Reg::X24, A64Reg::SP, -16);
     assembler_.stp_pre(A64Reg::X25, A64Reg::X26, A64Reg::SP, -16);
     assembler_.stp_pre(A64Reg::X27, A64Reg::X28, A64Reg::SP, -16);
+
+    // Save context pointer (X0) into callee-saved register X19
+    assembler_.mov_x64_x64(A64Reg::X19, A64Reg::X0);
 }
 
 void A64CodeGenerator::emit_epilogue() noexcept {
@@ -104,6 +109,29 @@ Status A64CodeGenerator::emit_instruction(const ir::Instruction* instr) noexcept
             set_reg(instr->result(), dst);
             break;
         }
+
+        case Opcode::LoadColumn: {
+            auto load_op = static_cast<const LoadColumnOp*>(instr);
+            A64Reg dst = allocate_reg();
+            u32 cid = load_op->column_id();
+            switch (cid) {
+                case 0: assembler_.ldr_x64(dst, A64Reg::X19, 0); break;   // exchange_ts_ns
+                case 1: assembler_.ldr_x64(dst, A64Reg::X19, 8); break;   // receive_ts_ns
+                case 2: assembler_.ldr_x64(dst, A64Reg::X19, 16); break;  // sequence
+                case 3: assembler_.ldr_w32(dst, A64Reg::X19, 24); break;  // instrument_id
+                case 4: assembler_.ldrb(dst, A64Reg::X19, 28); break;     // event_type
+                case 5: assembler_.ldrb(dst, A64Reg::X19, 29); break;     // side
+                case 6: assembler_.ldrh(dst, A64Reg::X19, 30); break;     // flags
+                case 7: assembler_.ldr_x64(dst, A64Reg::X19, 32); break;  // price_ticks
+                case 8: assembler_.ldr_w32(dst, A64Reg::X19, 40); break;  // quantity
+                case 9: assembler_.ldrh(dst, A64Reg::X19, 44); break;     // venue_id
+                case 10: assembler_.ldrh(dst, A64Reg::X19, 46); break;    // source_id
+                case 11: assembler_.ldr_x64(dst, A64Reg::X19, 48); break; // trade_or_order_id
+                default: assembler_.mov_x64_imm64(dst, 0); break;
+            }
+            set_reg(instr->result(), dst);
+            break;
+        }
         
         case Opcode::AddU64:
         case Opcode::AddI64: {
@@ -134,8 +162,27 @@ Status A64CodeGenerator::emit_instruction(const ir::Instruction* instr) noexcept
             set_reg(instr->result(), dst);
             break;
         }
+
+        case Opcode::DivU64: {
+            A64Reg lhs = get_reg(instr->operand(0));
+            A64Reg rhs = get_reg(instr->operand(1));
+            A64Reg dst = allocate_reg();
+            assembler_.udiv_x64_x64_x64(dst, lhs, rhs);
+            set_reg(instr->result(), dst);
+            break;
+        }
+
+        case Opcode::DivI64: {
+            A64Reg lhs = get_reg(instr->operand(0));
+            A64Reg rhs = get_reg(instr->operand(1));
+            A64Reg dst = allocate_reg();
+            assembler_.sdiv_x64_x64_x64(dst, lhs, rhs);
+            set_reg(instr->result(), dst);
+            break;
+        }
         
-        case Opcode::And: {
+        case Opcode::And:
+        case Opcode::BitAnd: {
             A64Reg lhs = get_reg(instr->operand(0));
             A64Reg rhs = get_reg(instr->operand(1));
             A64Reg dst = allocate_reg();
@@ -144,7 +191,8 @@ Status A64CodeGenerator::emit_instruction(const ir::Instruction* instr) noexcept
             break;
         }
         
-        case Opcode::Or: {
+        case Opcode::Or:
+        case Opcode::BitOr: {
             A64Reg lhs = get_reg(instr->operand(0));
             A64Reg rhs = get_reg(instr->operand(1));
             A64Reg dst = allocate_reg();
@@ -162,7 +210,8 @@ Status A64CodeGenerator::emit_instruction(const ir::Instruction* instr) noexcept
             break;
         }
         
-        case Opcode::EqU64: {
+        case Opcode::EqU64:
+        case Opcode::EqI64: {
             A64Reg lhs = get_reg(instr->operand(0));
             A64Reg rhs = get_reg(instr->operand(1));
             A64Reg dst = allocate_reg();
@@ -172,7 +221,8 @@ Status A64CodeGenerator::emit_instruction(const ir::Instruction* instr) noexcept
             break;
         }
         
-        case Opcode::NeU64: {
+        case Opcode::NeU64:
+        case Opcode::NeI64: {
             A64Reg lhs = get_reg(instr->operand(0));
             A64Reg rhs = get_reg(instr->operand(1));
             A64Reg dst = allocate_reg();
@@ -187,7 +237,17 @@ Status A64CodeGenerator::emit_instruction(const ir::Instruction* instr) noexcept
             A64Reg rhs = get_reg(instr->operand(1));
             A64Reg dst = allocate_reg();
             assembler_.cmp_x64_x64(lhs, rhs);
-            assembler_.cset_x64(dst, A64Condition::LO); // Unsigned < (CC/LO)
+            assembler_.cset_x64(dst, A64Condition::LO);
+            set_reg(instr->result(), dst);
+            break;
+        }
+
+        case Opcode::LtI64: {
+            A64Reg lhs = get_reg(instr->operand(0));
+            A64Reg rhs = get_reg(instr->operand(1));
+            A64Reg dst = allocate_reg();
+            assembler_.cmp_x64_x64(lhs, rhs);
+            assembler_.cset_x64(dst, A64Condition::LT);
             set_reg(instr->result(), dst);
             break;
         }
@@ -197,7 +257,17 @@ Status A64CodeGenerator::emit_instruction(const ir::Instruction* instr) noexcept
             A64Reg rhs = get_reg(instr->operand(1));
             A64Reg dst = allocate_reg();
             assembler_.cmp_x64_x64(lhs, rhs);
-            assembler_.cset_x64(dst, A64Condition::LS); // Unsigned <=
+            assembler_.cset_x64(dst, A64Condition::LS);
+            set_reg(instr->result(), dst);
+            break;
+        }
+
+        case Opcode::LeI64: {
+            A64Reg lhs = get_reg(instr->operand(0));
+            A64Reg rhs = get_reg(instr->operand(1));
+            A64Reg dst = allocate_reg();
+            assembler_.cmp_x64_x64(lhs, rhs);
+            assembler_.cset_x64(dst, A64Condition::LE);
             set_reg(instr->result(), dst);
             break;
         }
@@ -207,7 +277,17 @@ Status A64CodeGenerator::emit_instruction(const ir::Instruction* instr) noexcept
             A64Reg rhs = get_reg(instr->operand(1));
             A64Reg dst = allocate_reg();
             assembler_.cmp_x64_x64(lhs, rhs);
-            assembler_.cset_x64(dst, A64Condition::HI); // Unsigned >
+            assembler_.cset_x64(dst, A64Condition::HI);
+            set_reg(instr->result(), dst);
+            break;
+        }
+
+        case Opcode::GtI64: {
+            A64Reg lhs = get_reg(instr->operand(0));
+            A64Reg rhs = get_reg(instr->operand(1));
+            A64Reg dst = allocate_reg();
+            assembler_.cmp_x64_x64(lhs, rhs);
+            assembler_.cset_x64(dst, A64Condition::GT);
             set_reg(instr->result(), dst);
             break;
         }
@@ -217,7 +297,29 @@ Status A64CodeGenerator::emit_instruction(const ir::Instruction* instr) noexcept
             A64Reg rhs = get_reg(instr->operand(1));
             A64Reg dst = allocate_reg();
             assembler_.cmp_x64_x64(lhs, rhs);
-            assembler_.cset_x64(dst, A64Condition::HS); // Unsigned >= (CS/HS)
+            assembler_.cset_x64(dst, A64Condition::HS);
+            set_reg(instr->result(), dst);
+            break;
+        }
+
+        case Opcode::GeI64: {
+            A64Reg lhs = get_reg(instr->operand(0));
+            A64Reg rhs = get_reg(instr->operand(1));
+            A64Reg dst = allocate_reg();
+            assembler_.cmp_x64_x64(lhs, rhs);
+            assembler_.cset_x64(dst, A64Condition::GE);
+            set_reg(instr->result(), dst);
+            break;
+        }
+
+        case Opcode::Select: {
+            auto sel_op = static_cast<const SelectOp*>(instr);
+            A64Reg cond = get_reg(sel_op->condition());
+            A64Reg true_val = get_reg(sel_op->true_value());
+            A64Reg false_val = get_reg(sel_op->false_value());
+            A64Reg dst = allocate_reg();
+            assembler_.cmp_x64_x64(cond, A64Reg::XZR);
+            assembler_.csel_x64(dst, true_val, false_val, A64Condition::NE);
             set_reg(instr->result(), dst);
             break;
         }

@@ -270,6 +270,39 @@ public:
             emit(0xF8400000 | imm9 | (r_idx(base) << 5) | r_idx(dst));
         }
     }
+
+    // ldr wD, [xN, #offset] (load 32-bit unsigned, zero-extended)
+    void ldr_w32(A64Reg dst, A64Reg base, i32 offset = 0) {
+        if (offset >= 0 && (offset & 3) == 0 && offset <= 16380) {
+            u32 imm12 = static_cast<u32>(offset / 4) & 0xFFF;
+            emit(0xB9400000 | (imm12 << 10) | (r_idx(base) << 5) | r_idx(dst));
+        } else {
+            u32 imm9 = (static_cast<u32>(offset) & 0x1FF) << 12;
+            emit(0xB8400000 | imm9 | (r_idx(base) << 5) | r_idx(dst));
+        }
+    }
+
+    // ldrh wD, [xN, #offset] (load 16-bit unsigned, zero-extended)
+    void ldrh(A64Reg dst, A64Reg base, i32 offset = 0) {
+        if (offset >= 0 && (offset & 1) == 0 && offset <= 8190) {
+            u32 imm12 = static_cast<u32>(offset / 2) & 0xFFF;
+            emit(0x79400000 | (imm12 << 10) | (r_idx(base) << 5) | r_idx(dst));
+        } else {
+            u32 imm9 = (static_cast<u32>(offset) & 0x1FF) << 12;
+            emit(0x78400000 | imm9 | (r_idx(base) << 5) | r_idx(dst));
+        }
+    }
+
+    // ldrb wD, [xN, #offset] (load 8-bit unsigned, zero-extended)
+    void ldrb(A64Reg dst, A64Reg base, i32 offset = 0) {
+        if (offset >= 0 && offset <= 4095) {
+            u32 imm12 = static_cast<u32>(offset) & 0xFFF;
+            emit(0x39400000 | (imm12 << 10) | (r_idx(base) << 5) | r_idx(dst));
+        } else {
+            u32 imm9 = (static_cast<u32>(offset) & 0x1FF) << 12;
+            emit(0x38400000 | imm9 | (r_idx(base) << 5) | r_idx(dst));
+        }
+    }
     
     // str xD, [xN, #offset] (offset must be multiple of 8, 0 <= offset <= 32760)
     void str_x64(A64Reg src, A64Reg base, i32 offset = 0) {
