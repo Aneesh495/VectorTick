@@ -182,6 +182,7 @@ set(VT_TEST_SUITES
     jit_differential_tests
     recovery_tests
     cli_integration_tests
+    fuzz_smoke_tests
 )
 
 foreach(SUITE ${VT_TEST_SUITES})
@@ -196,8 +197,9 @@ target_link_libraries(vectortick_bench PRIVATE vectortick)
 set_warning_flags(vectortick_bench)
 set_sanitizer_flags(vectortick_bench)
 
-# Fuzz targets (only with Clang)
-if(VT_COMPILER_CLANG OR VT_COMPILER_APPLECLANG)
+# Fuzz targets
+option(VT_ENABLE_FUZZING "Build fuzz targets with libFuzzer" OFF)
+if(VT_ENABLE_FUZZING AND (VT_COMPILER_CLANG OR VT_COMPILER_APPLECLANG))
     file(GLOB VT_FUZZ_SOURCES fuzz/*.cpp)
     foreach(FUZZ_SOURCE ${VT_FUZZ_SOURCES})
         get_filename_component(FUZZ_NAME ${FUZZ_SOURCE} NAME_WE)

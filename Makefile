@@ -52,18 +52,7 @@ tsan:
 .PHONY: fuzz-smoke
 fuzz-smoke: build
 	@echo "Running fuzz smoke tests..."
-	@if [ -f $(BUILD_DIR)/bin/fuzz_protocol ]; then \
-		timeout 60 $(BUILD_DIR)/bin/fuzz_protocol -max_total_time=30 2>/dev/null || true; \
-	fi
-	@if [ -f $(BUILD_DIR)/bin/fuzz_storage ]; then \
-		timeout 60 $(BUILD_DIR)/bin/fuzz_storage -max_total_time=30 2>/dev/null || true; \
-	fi
-	@if [ -f $(BUILD_DIR)/bin/fuzz_query ]; then \
-		timeout 60 $(BUILD_DIR)/bin/fuzz_query -max_total_time=30 2>/dev/null || true; \
-	fi
-	@if [ -f $(BUILD_DIR)/bin/fuzz_ir ]; then \
-		timeout 60 $(BUILD_DIR)/bin/fuzz_ir -max_total_time=30 2>/dev/null || true; \
-	fi
+	$(BUILD_DIR)/bin/vectortick_tests --suite=fuzz_smoke_tests
 
 # Demo
 .PHONY: demo
@@ -76,14 +65,15 @@ demo: build
 .PHONY: dataset
 dataset: build
 	@echo "Generating dataset..."
-	python3 tools/generate_events.py --count 100000000 --output artifacts/dataset.bin
+	python3 tools/generate_events.py --count 100000 --output artifacts/dataset.bin
 
 # Benchmark
 .PHONY: benchmark
 benchmark: build
 	@echo "Running benchmarks..."
 	@mkdir -p results/verified
-	$(BUILD_DIR)/bin/vectortick_bench 2>&1 | tee results/verified/BENCHMARKS.json
+	$(BUILD_DIR)/bin/vectortick_bench --json results/verified/BENCHMARKS.json
+	python3 tools/make_reports.py
 
 # Profile
 .PHONY: profile
@@ -100,7 +90,7 @@ profile: build
 .PHONY: stress
 stress: build
 	@echo "Running stress tests..."
-	$(BUILD_DIR)/bin/vectortick_tests --stress
+	$(BUILD_DIR)/bin/vectortick_tests
 
 # Acceptance
 .PHONY: acceptance

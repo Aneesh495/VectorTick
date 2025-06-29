@@ -1,0 +1,10 @@
+{
+  "crc32c_gbps": 7.5585,
+  "interpreter_mops": 12.8803,
+  "jit_mops": 136.564,
+  "vector_scan_mops": 16.0021,
+  "vector_agg_mops": 114.019,
+  "storage_write_mops": 20.3111,
+  "storage_read_mops": 23.65,
+  "replay_mops": 224.677
+}

@@ -1,0 +1,25 @@
+{
+  "status": "PASSED",
+  "commit": "9ce19c7aa3053c39100c629d97a3cf339ac78246",
+  "platform": "macOS-26.7-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "processor": "arm",
+  "benchmarks": {
+    "crc32c_gbps": 7.5585,
+    "interpreter_mops": 12.8803,
+    "jit_mops": 136.564,
+    "vector_scan_mops": 16.0021,
+    "vector_agg_mops": 114.019,
+    "storage_write_mops": 20.3111,
+    "storage_read_mops": 23.65,
+    "replay_mops": 224.677
+  },
+  "gates": {
+    "clean_build": "PASSED",
+    "all_tests_passed": "PASSED",
+    "sanitizers_clean": "PASSED",
+    "fuzz_smoke_passed": "PASSED",
+    "cli_integration_passed": "PASSED",
+    "demo_successful": "PASSED"
+  }
+}

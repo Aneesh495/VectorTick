@@ -1,0 +1,41 @@
+========================================================
+       VectorTick Columnar Analytics Engine Demo         
+========================================================
+
+[Step 1] Ingesting 5000 market events into VTS1 segment...
+  -> Wrote demo_market_data.vts (129408 bytes)
+
+[Step 2] Opening and Inspecting Segment Metadata...
+  Segment ID:      1
+  Rows:            5000
+  Schema Hash:     0x7b021668
+  Integrity Check: PASSED (CRC32C Verified)
+
+[Step 3] Executing SQL Query via Portable Vectorized Engine...
+  Query: SELECT instrument_id, price_ticks, quantity WHERE price_ticks > 15300 LIMIT 5
+  Engine Architecture: AArch64 NEON
+  Results (5 rows returned, 380 matched out of 5000):
+instrument_id   price_ticks     quantity        
+------------------------------------------------
+102             15310           65              
+103             15320           70              
+101             15330           75              
+102             15340           80              
+103             15350           85              
+
+[Step 4] Executing Aggregation Query...
+  Query: SELECT COUNT(*), SUM(quantity), MIN(price_ticks), MAX(price_ticks) WHERE instrument_id = 101
+COUNT()         SUM()           MIN()           MAX()           
+----------------------------------------------------------------
+1667            95835           15000           15490           
+
+[Step 5] Native Host JIT Compiler Verification...
+  Host JIT execution result on price 15450 > 15400: 1 (PASSED)
+
+[Step 6] Deterministic Replay Engine...
+  Replayed 5000 events in 0.023542 ms (212386373 events/sec)
+  Sequence Breaks: 0
+
+========================================================
+              Demo Completed Successfully!              
+========================================================

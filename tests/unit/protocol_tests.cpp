@@ -9,7 +9,7 @@ using namespace vectortick::vtp1;
 
 VT_TEST(protocol_tests, quote_bid_and_ask_preservation) {
     // Test that bid quote preserves bid price and qty
-    CanonicalEvent bid_ev;
+    CanonicalEvent bid_ev{};
     bid_ev.exchange_ts_ns = 1700000000123456789ULL;
     bid_ev.receive_ts_ns = 1700000000123456999ULL;
     bid_ev.sequence = 101;
@@ -26,7 +26,7 @@ VT_TEST(protocol_tests, quote_bid_and_ask_preservation) {
     VT_ASSERT(enc_res.value() > 0);
     
     Decoder decoder;
-    CanonicalEvent decoded_bid;
+    CanonicalEvent decoded_bid{};
     auto dec_res = decoder.decode_frame(buffer, enc_res.value(), decoded_bid, 1700000000123456999ULL);
     VT_ASSERT(dec_res.ok());
     VT_ASSERT(decoded_bid.event_type == EventType::Quote);
@@ -37,7 +37,7 @@ VT_TEST(protocol_tests, quote_bid_and_ask_preservation) {
     VT_ASSERT(decoded_bid.sequence == 101);
     
     // Test that ask quote preserves ask price and qty (Defect #9 regression test)
-    CanonicalEvent ask_ev;
+    CanonicalEvent ask_ev{};
     ask_ev.exchange_ts_ns = 1700000000223456789ULL;
     ask_ev.receive_ts_ns = 1700000000223456999ULL;
     ask_ev.sequence = 102;
@@ -50,7 +50,7 @@ VT_TEST(protocol_tests, quote_bid_and_ask_preservation) {
     enc_res = encoder.encode_event(ask_ev, buffer, sizeof(buffer), 1);
     VT_ASSERT(enc_res.ok());
     
-    CanonicalEvent decoded_ask;
+    CanonicalEvent decoded_ask{};
     dec_res = decoder.decode_frame(buffer, enc_res.value(), decoded_ask, 1700000000223456999ULL);
     VT_ASSERT(dec_res.ok());
     VT_ASSERT(decoded_ask.event_type == EventType::Quote);
@@ -60,7 +60,7 @@ VT_TEST(protocol_tests, quote_bid_and_ask_preservation) {
 }
 
 VT_TEST(protocol_tests, trade_roundtrip) {
-    CanonicalEvent trade_ev;
+    CanonicalEvent trade_ev{};
     trade_ev.exchange_ts_ns = 1700000000500000000ULL;
     trade_ev.receive_ts_ns = 1700000000500000100ULL;
     trade_ev.sequence = 200;
@@ -79,7 +79,7 @@ VT_TEST(protocol_tests, trade_roundtrip) {
     VT_ASSERT(enc_res.ok());
     
     Decoder decoder;
-    CanonicalEvent decoded;
+    CanonicalEvent decoded{};
     auto dec_res = decoder.decode_frame(buffer, enc_res.value(), decoded, trade_ev.receive_ts_ns);
     VT_ASSERT(dec_res.ok());
     VT_ASSERT(decoded.event_type == EventType::Trade);
@@ -92,11 +92,12 @@ VT_TEST(protocol_tests, trade_roundtrip) {
 }
 
 VT_TEST(protocol_tests, crc_corruption_rejected) {
-    CanonicalEvent ev;
+    CanonicalEvent ev{};
     ev.exchange_ts_ns = 1700000000000000000ULL;
     ev.sequence = 300;
     ev.instrument_id = 1;
     ev.event_type = EventType::Trade;
+    ev.side = Side::Bid;
     ev.price_ticks = 100;
     ev.quantity = 10;
     
@@ -109,18 +110,19 @@ VT_TEST(protocol_tests, crc_corruption_rejected) {
     buffer[FrameHeader::Size + 2] ^= 0xFF;
     
     Decoder decoder;
-    CanonicalEvent decoded;
+    CanonicalEvent decoded{};
     auto dec_res = decoder.decode_frame(buffer, enc_res.value(), decoded);
     VT_ASSERT(!dec_res.ok());
     VT_ASSERT(dec_res.status().code() == StatusCode::InvalidChecksum);
 }
 
 VT_TEST(protocol_tests, sequence_non_monotonic_rejected) {
-    CanonicalEvent ev1;
+    CanonicalEvent ev1{};
     ev1.exchange_ts_ns = 1700000000000000000ULL;
     ev1.sequence = 500;
     ev1.instrument_id = 1;
     ev1.event_type = EventType::Trade;
+    ev1.side = Side::Bid;
     ev1.price_ticks = 100;
     ev1.quantity = 10;
     

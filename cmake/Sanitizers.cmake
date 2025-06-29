@@ -1,8 +1,19 @@
-# Sanitizers configuration
-
 option(ENABLE_ASAN "Enable AddressSanitizer" OFF)
 option(ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
 option(ENABLE_TSAN "Enable ThreadSanitizer" OFF)
+option(VT_ENABLE_ASAN "Enable AddressSanitizer" OFF)
+option(VT_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
+option(VT_ENABLE_TSAN "Enable ThreadSanitizer" OFF)
+
+if(VT_ENABLE_ASAN)
+    set(ENABLE_ASAN ON)
+endif()
+if(VT_ENABLE_UBSAN)
+    set(ENABLE_UBSAN ON)
+endif()
+if(VT_ENABLE_TSAN)
+    set(ENABLE_TSAN ON)
+endif()
 
 function(set_sanitizer_flags target)
     get_target_property(target_type ${target} TYPE)

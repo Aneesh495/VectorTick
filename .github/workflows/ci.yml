@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build_and_test:
+    name: ${{ matrix.os }} - ${{ matrix.build_type }} - ${{ matrix.compiler }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        build_type: [Release, Debug]
+        compiler: [clang, gcc]
+        exclude:
+          - os: macos-latest
+            compiler: gcc
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build libpcap-dev
+          if [ "${{ matrix.compiler }}" = "clang" ]; then
+            sudo apt-get install -y clang llvm
+            echo "CC=clang" >> $GITHUB_ENV
+            echo "CXX=clang++" >> $GITHUB_ENV
+          else
+            sudo apt-get install -y g++-13 gcc-13
+            echo "CC=gcc-13" >> $GITHUB_ENV
+            echo "CXX=g++-13" >> $GITHUB_ENV
+          fi
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run Tests
+        run: ctest --test-dir build --output-on-failure --parallel 4
+
+      - name: Run Demo
+        run: ./build/bin/vectortick_demo
+
+  sanitizers:
+    name: Linux Sanitizers (ASan + UBSan)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build clang llvm libpcap-dev
+          echo "CC=clang" >> $GITHUB_ENV
+          echo "CXX=clang++" >> $GITHUB_ENV
+
+      - name: Configure with Sanitizers
+        run: |
+          cmake -B build-san -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DVT_ENABLE_ASAN=ON \
+            -DVT_ENABLE_UBSAN=ON
+
+      - name: Build
+        run: cmake --build build-san --parallel
+
+      - name: Run Sanitized Tests
+        run: ctest --test-dir build-san --output-on-failure

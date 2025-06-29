@@ -39,8 +39,8 @@ compile_commands.json
 artifacts/dataset.bin
 artifacts/demo/*.bin
 artifacts/demo/*.pcap
-results/verified/*.json
-!results/verified/.gitkeep
+
+# Temporary files
 
 # Test artifacts
 *.gcda

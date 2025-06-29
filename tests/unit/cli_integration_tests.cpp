@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <array>
 #include <memory>
+#include <unistd.h>
 
 using namespace vectortick;
 using namespace vectortick::test;
@@ -64,10 +65,14 @@ void make_cli_segment(const std::string& path, usize count) {
     VT_ASSERT(st.ok());
 }
 
+std::string unique_test_path(const std::string& prefix, const std::string& ext) {
+    return prefix + "_" + std::to_string(getpid()) + ext;
+}
+
 } // namespace
 
 VT_TEST(cli_integration_tests, inspect_schema_and_metadata) {
-    std::string seg_file = "test_cli_inspect.vts";
+    std::string seg_file = unique_test_path("test_cli_inspect", ".vts");
     std::error_code ec;
     std::filesystem::remove(seg_file, ec);
 
@@ -86,7 +91,7 @@ VT_TEST(cli_integration_tests, inspect_schema_and_metadata) {
 }
 
 VT_TEST(cli_integration_tests, query_filter_and_aggregates) {
-    std::string seg_file = "test_cli_query.vts";
+    std::string seg_file = unique_test_path("test_cli_query", ".vts");
     std::error_code ec;
     std::filesystem::remove(seg_file, ec);
 
@@ -107,7 +112,7 @@ VT_TEST(cli_integration_tests, query_filter_and_aggregates) {
 }
 
 VT_TEST(cli_integration_tests, replay_cli_execution) {
-    std::string seg_file = "test_cli_replay.vts";
+    std::string seg_file = unique_test_path("test_cli_replay", ".vts");
     std::error_code ec;
     std::filesystem::remove(seg_file, ec);
 
@@ -130,7 +135,7 @@ VT_TEST(cli_integration_tests, demo_execution_status) {
 }
 
 VT_TEST(cli_integration_tests, bench_json_generation) {
-    std::string json_file = "test_bench_out.json";
+    std::string json_file = unique_test_path("test_bench_out", ".json");
     std::error_code ec;
     std::filesystem::remove(json_file, ec);
 
