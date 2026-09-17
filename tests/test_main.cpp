@@ -16,14 +16,20 @@ using namespace vectortick;
 // Test framework
 static int tests_run = 0;
 static int tests_passed = 0;
+static bool test_failed = false;
 
 #define TEST(name) \
     static void test_##name(); \
     static struct TestRunner_##name { \
         TestRunner_##name() { \
             ++tests_run; \
+            test_failed = false; \
             std::cout << "Running: " #name << "... "; \
             test_##name(); \
+            if (!test_failed) { \
+                ++tests_passed; \
+                std::cout << "PASSED\n"; \
+            } \
         } \
     } test_runner_##name; \
     static void test_##name()
@@ -32,6 +38,7 @@ static int tests_passed = 0;
     do { \
         if (!(cond)) { \
             std::cout << "FAILED: " #cond << "\n"; \
+            test_failed = true; \
             return; \
         } \
     } while(0)
@@ -40,6 +47,7 @@ static int tests_passed = 0;
     do { \
         if ((a) != (b)) { \
             std::cout << "FAILED: " #a " != " #b << "\n"; \
+            test_failed = true; \
             return; \
         } \
     } while(0)
