@@ -9,21 +9,21 @@ VectorTick is a high-performance C++20 columnar storage, query, and deterministi
 **Feature Complete** - All core components implemented and tested.
 
 ### Completed Components
-- ✅ Build system (CMake, Makefile)
-- ✅ Core types and utilities (fixed-width integers, CRC32C, endian handling)
-- ✅ Memory management (aligned buffers, arenas, buffer pools, mmap)
-- ✅ Concurrency primitives (SPSC rings, worker pool)
-- ✅ VTP1 wire protocol (decoder, frame parser, message types)
-- ✅ PCAP reader (libpcap-compatible format)
-- ✅ Compression codecs (bit packing, RLE, dictionary, varint)
-- ✅ VTS1 storage format (file format, segment reader/writer)
-- ✅ Query language (lexer, parser, AST)
-- ✅ SSA IR (instructions, basic blocks, functions, builder)
-- ✅ Reference interpreter
-- ✅ JIT compilation (x86-64 and AArch64 backends)
-- ✅ Test suite
-- ✅ Benchmark suite
-- ✅ Fuzz testing infrastructure
+- Build system (CMake, Makefile)
+- Core types and utilities (fixed-width integers, CRC32C, endian handling)
+- Memory management (aligned buffers, arenas, buffer pools, mmap)
+- Concurrency primitives (SPSC rings, worker pool)
+- VTP1 wire protocol (decoder, frame parser, message types)
+- PCAP reader (libpcap-compatible format)
+- Compression codecs (bit packing, RLE, dictionary, varint)
+- VTS1 storage format (file format, segment reader/writer)
+- Query language (lexer, parser, AST)
+- SSA IR (instructions, basic blocks, functions, builder)
+- Reference interpreter
+- JIT compilation (x86-64 and AArch64 backends)
+- Test suite
+- Benchmark suite
+- Fuzz testing infrastructure
 
 ## Quick Start
 
