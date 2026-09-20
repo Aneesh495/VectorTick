@@ -7,6 +7,12 @@ out/
 # IDE
 .vscode/
 .idea/
+.codex/
+.kiro/
+.cursor/
+.claude/
+.gemini/
+.agents/
 *.swp
 *.swo
 *~
